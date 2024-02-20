@@ -4,6 +4,8 @@ import pprint
 import random
 import time
 import threading
+from commlib.msg import PubSubMessage
+from commlib.transports.amqp import Subscriber, ConnectionParameters
 
 class Node:
     def __init__(self, data):
@@ -120,9 +122,16 @@ class AppMakerExecutor:
         self.store = {}
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
-        
+
+        # self.conn_params = ConnectionParameters...
+        # self.subscriber = Subscriber(self.conn_params,  self.on_message, topic='appmaker.deploy',)
+        # node.run_forever(sleep_rate=1)
+
         self.load_model()
         print("AppMakerExecutor initialized with model: ", self.appmaker_model)
+
+    def on_message(self, message):
+        print("Received message: ", message)
 
     def findCoorespondingThreadJoin(self, thread_split_id):
         # Find the corresponding thread join node
