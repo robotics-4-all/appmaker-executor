@@ -14,15 +14,22 @@ class Node:
         self.count = data['data']['count']
         self.parameters = data['data']['parameters'] if 'parameters' in data['data'] else []
         self.connections = {}
+        self.is_preempted = False
         # In case of thread split, we need to keep the executors
         self.executors = {}
         # In case of thread join, we need to keep the next join node
         self.nextJoin = None
+        # In case of preempt, we need to keep the executor to kill
+        self.executor_to_preempt = None
 
     def addConnection(self, node, connection):
         self.connections[node.id] = connection
 
     def execute(self):
+        if self.is_preempted:
+            print("Node: ", self.id, " ", self.label, " is preempted")
+            return None
+
         if self.label == "Condition":
             # Select one of the outputs at random
             print("Executing node: ", self.id, " ", self.label)
@@ -47,6 +54,12 @@ class Node:
                         print("Threads finished")
                         break
             return self.nextJoin
+        elif self.label == "Preempt":
+            # Enforce preemption
+            print("Executing node: ", self.id, " ", self.label)
+            time.sleep(1)
+            self.executor_to_preempt.enforcePreemption()
+            return list(self.connections.keys())[0]
         else:
             print("Executing node: ", self.id, " ", self.label)
             time.sleep(1)
@@ -69,6 +82,8 @@ class NodeExecutor:
         self.nodes = {}
         self.runner = None
         self.finished = False
+        self.to_preempt = False
+        self.is_preempted = False
 
     def addNode(self, node):
         self.nodes[node.id] = node
@@ -78,6 +93,9 @@ class NodeExecutor:
 
     def execute(self):
         print("Executor: ", self.execType, " started")
+        # Make the is_preempted flag of all nodes false
+        for n in self.nodes:
+            self.nodes[n].is_preempted = False
         self.finished = False
         self.runner = self.starting_node
         while self.runner != None and self.runner in self.nodes:
@@ -88,6 +106,12 @@ class NodeExecutor:
 
     def executeThreaded(self):
         threading.Thread(target=self.execute).start()
+
+    def enforcePreemption(self):
+        self.is_preempted = True
+        for n in self.nodes:
+            self.nodes[n].is_preempted = True
+        # No need to finish this, the next node will take care of it
 
 class AppMakerExecutor:
     def __init__(self, model_file):
@@ -200,6 +224,27 @@ class AppMakerExecutor:
             for n in self.node_executors[e].nodes:
                 print("\t", n, " ", self.node_executors[e].nodes[n].label)
             print("\n")
+
+        # Find the preempt nodes
+        for id in self.nodes:
+            if self.nodes[id].label == "Preempt":
+                thread_parameter = self.nodes[id].parameters[0]['value']
+                # Split the thread parameter by :
+                thread_parameter = thread_parameter.split(":")
+                # Trim the spaces and make them integers
+                thread_parameter = [int(x.strip()) for x in thread_parameter]
+                node_count = thread_parameter[0]
+                thread_count = thread_parameter[1]
+                # Find the node with count equal to node_count
+                for n in self.nodes:
+                    if self.nodes[n].count == node_count:
+                        # Find the next node of the thread with count equal to thread_count
+                        for c in self.nodes[n].connections:
+                            print(c, self.nodes[n].connections[c])
+                            if self.nodes[n].connections[c]['sourceHandle'] == f"out_{thread_count}":
+                                self.nodes[id].executor_to_preempt = self.node_executors[c]
+                                print("Executor to preempt: ", c, " ", self.nodes[c].label)
+                                break
 
     def execute(self):
         # Find the start executor and deploy it
