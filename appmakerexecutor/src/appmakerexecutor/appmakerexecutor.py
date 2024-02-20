@@ -1,6 +1,9 @@
 import sys
 import json
 import pprint
+import random
+import time
+import threading
 
 class Node:
     def __init__(self, data):
@@ -11,9 +14,43 @@ class Node:
         self.count = data['data']['count']
         self.parameters = data['data']['parameters'] if 'parameters' in data['data'] else []
         self.connections = {}
+        # In case of thread split, we need to keep the executors
+        self.executors = {}
+        # In case of thread join, we need to keep the next join node
+        self.nextJoin = None
 
     def addConnection(self, node, connection):
         self.connections[node.id] = connection
+
+    def execute(self):
+        if self.label == "Condition":
+            # Select one of the outputs at random
+            print("Executing node: ", self.id, " ", self.label)
+            time.sleep(1)
+            l = random.randint(0, len(self.connections) - 1)
+            return list(self.connections.keys())[l]
+        elif self.label == "End":
+            return None
+        elif self.label == "Thread split":
+            # We must start the executors threaded
+            time.sleep(1)
+            print("Executing node: ", self.id, " ", self.label)
+            if self.executors:
+                print("Executing threads")
+                for e in self.executors:
+                    self.executors[e].finished = False
+                    self.executors[e].executeThreaded()
+                print("Waiting for threads to finish") 
+                while True:
+                    time.sleep(0.1)
+                    if all([self.executors[e].finished for e in self.executors]):
+                        print("Threads finished")
+                        break
+            return self.nextJoin
+        else:
+            print("Executing node: ", self.id, " ", self.label)
+            time.sleep(1)
+            return list(self.connections.keys())[0]
 
     def printNode(self):
         print("Node: ", self.id, " ", self.label, " ", self.count)
@@ -30,6 +67,8 @@ class NodeExecutor:
         self.is_preempted = False
         self.execType = execType
         self.nodes = {}
+        self.runner = None
+        self.finished = False
 
     def addNode(self, node):
         self.nodes[node.id] = node
@@ -38,7 +77,17 @@ class NodeExecutor:
         self.starting_node = node_id
 
     def execute(self):
-        pass
+        print("Executor: ", self.execType, " started")
+        self.finished = False
+        self.runner = self.starting_node
+        while self.runner != None and self.runner in self.nodes:
+            self.runner = self.nodes[self.runner].execute()
+            print("Runner: ", self.runner)
+        print("Executor: ", self.execType, " finished")
+        self.finished = True
+
+    def executeThreaded(self):
+        threading.Thread(target=self.execute).start()
 
 class AppMakerExecutor:
     def __init__(self, model_file):
@@ -77,6 +126,7 @@ class AppMakerExecutor:
             print("The thread split was found: ", node_id, " ", self.nodes[node_id].label)
             # Find the corresponding thread join node
             thread_join_id = self.findCoorespondingThreadJoin(node_id)
+            self.nodes[node_id].nextJoin = thread_join_id
             # Add the node to the executor
             self.node_executors[executor_id].addNode(self.nodes[thread_join_id])
             print("Thread join added to executor: ", executor_id)
@@ -127,14 +177,6 @@ class AppMakerExecutor:
                 print("Starting executor found: ", id, " ", self.nodes[id].label)
                 self.executorUpdate(id, id)
 
-            # if self.nodes[id].label == "Thread join":
-            #     self.node_executors[id] = NodeExecutor("thread_join")
-            #     self.node_executors[id].setStartingNode(id)
-            #     self.node_executors[id].addNode(self.nodes[id])
-            #     self.nodes_assigned_to_executors[id] = id
-            #     print("Thread join executor found: ", id, " ", self.nodes[id].label)
-            #     self.executorUpdate(id, id)
-
             if self.nodes[id].label == "Thread split":
                 # Start an executor from its neighbors
                 # Find neighbors ids of the node
@@ -148,6 +190,8 @@ class AppMakerExecutor:
                         self.nodes_assigned_to_executors[n] = n
                         print("Thread executor started: ", n, " ", self.nodes[n].label)
                         self.executorUpdate(n, n)
+                        # Addinng the threads as executors to node
+                        self.nodes[id].executors[n] = self.node_executors[n]
 
         print("Executors: ")
         for e in self.node_executors:
@@ -158,14 +202,19 @@ class AppMakerExecutor:
             print("\n")
 
     def execute(self):
-        pass
+        # Find the start executor and deploy it
+        for e in self.node_executors:
+            if self.node_executors[e].execType == "start":
+                self.node_executors[e].execute()
+                break
+        print("Execution finished")
 
 if __name__ == "__main__":
     # Get the model file as an argument
     model_file = sys.argv[1]
     # Load the model
     amexe = AppMakerExecutor(model_file)
+    print("AppMakerExecutor loaded")
     # Execute the model
     amexe.execute()
-
-print("AppMakerExecutor loaded")
+    print("AppMakerExecutor executed")
