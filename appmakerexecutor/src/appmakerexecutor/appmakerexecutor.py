@@ -19,7 +19,7 @@ class Node:
         print("Node: ", self.id, " ", self.label, " ", self.count)
         print("Parameters: ")
         for p in self.parameters:
-            print("\t", p['id'], " ", p['value'])
+            print("\t", p['id'], " ", p['value'] if 'value' in p else "")
         print("Connections: ")
         for c in self.connections:
             print("\tto ", c)
@@ -47,33 +47,56 @@ class AppMakerExecutor:
         self.store = {}
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
-        self.executors_terminators = [
-            "End",
-            "Thread split",
-            "Thread join",
-        ]
         
         self.load_model()
         print("AppMakerExecutor initialized with model: ", self.appmaker_model)
 
+    def findCoorespondingThreadJoin(self, thread_split_id):
+        # Find the corresponding thread join node
+        neighbors = [self.nodes[thread_split_id].connections[x]['target'] for x in self.nodes[thread_split_id].connections]
+        # Create a set of neighbors to avoid loops
+        # NOTE NOTE NOTE
+        while True:
+            temp_neighbors = []
+            print(">>", neighbors)
+            for n in neighbors:
+                if self.nodes[n].label == "Thread join":
+                    return n
+                else:
+                    temp_neighbors += [self.nodes[n].connections[x]['target'] for x in self.nodes[n].connections]
+            neighbors = temp_neighbors
+            
+        return None
+
     def executorUpdate(self, node_id, executor_id):
         # Check if the node is a terminator (unless the executor starts from the terminator)
-        if self.nodes[node_id].label in self.executors_terminators and node_id != executor_id: 
-            print("Terminator found: ", node_id, " ", self.nodes[node_id].label)
+        if self.nodes[node_id].label == "End": 
+            print("The end was found: ", node_id, " ", self.nodes[node_id].label)
             return
-        print("Not stopping! Going for neighbors of ", node_id)
-        # Find neighbors ids of the node
-        neighbors = self.nodes[node_id].connections
-        # Assign the neighbors to the executor
-        for n in neighbors:
-            print("Neighbor: ", n, " ", self.nodes[n].label)
-            if n not in self.nodes_assigned_to_executors:
-                print("Neighbor not assigned to executor yet, going for it")
-                self.nodes_assigned_to_executors[n] = executor_id
-                self.node_executors[executor_id].addNode(self.nodes[n])
-                print("Node", n, "added to executor: ", executor_id)
-                self.executorUpdate(n, executor_id)
-        
+        elif self.nodes[node_id].label == "Thread split" and node_id != executor_id:
+            print("The thread split was found: ", node_id, " ", self.nodes[node_id].label)
+            # Find the corresponding thread join node
+            thread_join_id = self.findCoorespondingThreadJoin(node_id)
+            # Add the node to the executor
+            self.node_executors[executor_id].addNode(self.nodes[thread_join_id])
+            print("Thread join added to executor: ", executor_id)
+            self.nodes_assigned_to_executors[thread_join_id] = executor_id
+            # Update the executor
+            self.executorUpdate(thread_join_id, executor_id)
+        else:
+            print("Not stopping! Going for neighbors of ", node_id)
+            # Find neighbors ids of the node
+            neighbors = self.nodes[node_id].connections
+            # Assign the neighbors to the executor
+            for n in neighbors:
+                print("Neighbor: ", n, " ", self.nodes[n].label)
+                if n not in self.nodes_assigned_to_executors:
+                    print("Neighbor not assigned to executor yet, going for it")
+                    self.nodes_assigned_to_executors[n] = executor_id
+                    self.node_executors[executor_id].addNode(self.nodes[n])
+                    print("Node", n, "added to executor: ", executor_id)
+                    self.executorUpdate(n, executor_id)
+            
     def load_model(self):
         # Load the model from the file
         with open(self.appmaker_model, 'r') as f:
@@ -104,13 +127,13 @@ class AppMakerExecutor:
                 print("Starting executor found: ", id, " ", self.nodes[id].label)
                 self.executorUpdate(id, id)
 
-            if self.nodes[id].label == "Thread join":
-                self.node_executors[id] = NodeExecutor("thread_join")
-                self.node_executors[id].setStartingNode(id)
-                self.node_executors[id].addNode(self.nodes[id])
-                self.nodes_assigned_to_executors[id] = id
-                print("Thread join executor found: ", id, " ", self.nodes[id].label)
-                self.executorUpdate(id, id)
+            # if self.nodes[id].label == "Thread join":
+            #     self.node_executors[id] = NodeExecutor("thread_join")
+            #     self.node_executors[id].setStartingNode(id)
+            #     self.node_executors[id].addNode(self.nodes[id])
+            #     self.nodes_assigned_to_executors[id] = id
+            #     print("Thread join executor found: ", id, " ", self.nodes[id].label)
+            #     self.executorUpdate(id, id)
 
             if self.nodes[id].label == "Thread split":
                 # Start an executor from its neighbors
