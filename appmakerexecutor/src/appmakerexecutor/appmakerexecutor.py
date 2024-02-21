@@ -4,8 +4,8 @@ import pprint
 import random
 import time
 import threading
-from commlib.msg import PubSubMessage
-from commlib.transports.amqp import Subscriber, ConnectionParameters
+from commlib.node import Node as CommlibNode
+from commlib.transports.mqtt import ConnectionParameters
 
 class Node:
     def __init__(self, data):
@@ -116,22 +116,31 @@ class NodeExecutor:
         # No need to finish this, the next node will take care of it
 
 class AppMakerExecutor:
-    def __init__(self, model_file):
-        self.appmaker_model = model_file
+    def __init__(self):
         self.nodes = {}
         self.store = {}
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
 
-        # self.conn_params = ConnectionParameters...
-        # self.subscriber = Subscriber(self.conn_params,  self.on_message, topic='appmaker.deploy',)
-        # node.run_forever(sleep_rate=1)
+        conn_params = ConnectionParameters(
+            host='broker.emqx.io',
+            port=1883,
+        )
 
-        self.load_model()
-        print("AppMakerExecutor initialized with model: ", self.appmaker_model)
+        self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
+                connection_params=conn_params,
+                heartbeats=False,
+                debug=True)
+        
+        self.commlib_node.create_subscriber(
+            topic="locsys/app_executor/deploy", 
+            on_message=self.on_message
+        )
 
     def on_message(self, message):
-        print("Received message: ", message)
+        print("Received model")
+        self.load_model(message)
+        self.execute()
 
     def findCoorespondingThreadJoin(self, thread_split_id):
         # Find the corresponding thread join node
@@ -180,20 +189,18 @@ class AppMakerExecutor:
                     print("Node", n, "added to executor: ", executor_id)
                     self.executorUpdate(n, executor_id)
             
-    def load_model(self):
+    def load_model(self, model):
         # Load the model from the file
-        with open(self.appmaker_model, 'r') as f:
-            model = json.load(f)
-            nodes = model['nodes']
-            edges = model['edges']
-            # store = model['store']
+        nodes = model['nodes']
+        edges = model['edges']
+        # store = model['store']
 
-            for n in nodes:
-                n = Node(n)
-                self.nodes[n.id] = n
+        for n in nodes:
+            n = Node(n)
+            self.nodes[n.id] = n
 
-            for e in edges:
-                self.nodes[e['source']].addConnection(self.nodes[e['target']], e)
+        for e in edges:
+            self.nodes[e['source']].addConnection(self.nodes[e['target']], e)
 
         for n in self.nodes:
             self.nodes[n].printNode()
@@ -264,11 +271,7 @@ class AppMakerExecutor:
         print("Execution finished")
 
 if __name__ == "__main__":
-    # Get the model file as an argument
-    model_file = sys.argv[1]
-    # Load the model
-    amexe = AppMakerExecutor(model_file)
+    amexe = AppMakerExecutor()
     print("AppMakerExecutor loaded")
-    # Execute the model
-    amexe.execute()
-    print("AppMakerExecutor executed")
+
+    amexe.commlib_node.run_forever()
