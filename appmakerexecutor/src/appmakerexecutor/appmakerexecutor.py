@@ -8,8 +8,9 @@ from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters
 
 class Node:
-    def __init__(self, data):
+    def __init__(self, data, publisher=None):
         self.data = data
+        self.publisher = publisher
         self.id = data['id']
         self.label = data['data']['label']
         self.toolbox = data['data']['toolbox']
@@ -27,22 +28,32 @@ class Node:
     def addConnection(self, node, connection):
         self.connections[node.id] = connection
 
+    def publish(self, message):
+        if self.publisher != None:
+            self.publisher.publish({
+                "node_id": self.id,
+                "message": message
+            })
+
     def execute(self):
+        next_node = None
         if self.is_preempted:
             print("Node: ", self.id, " ", self.label, " is preempted")
             return None
 
+        self.publish("start")
         if self.label == "Condition":
             # Select one of the outputs at random
             print("Executing node: ", self.id, " ", self.label)
-            time.sleep(1)
+            time.sleep(2)
             l = random.randint(0, len(self.connections) - 1)
-            return list(self.connections.keys())[l]
+            next_node = list(self.connections.keys())[l]
         elif self.label == "End":
-            return None
+            time.sleep(2)
+            next_node = None
         elif self.label == "Thread split":
             # We must start the executors threaded
-            time.sleep(1)
+            time.sleep(2)
             print("Executing node: ", self.id, " ", self.label)
             if self.executors:
                 print("Executing threads")
@@ -55,17 +66,20 @@ class Node:
                     if all([self.executors[e].finished for e in self.executors]):
                         print("Threads finished")
                         break
-            return self.nextJoin
+            next_node = self.nextJoin
         elif self.label == "Preempt":
             # Enforce preemption
             print("Executing node: ", self.id, " ", self.label)
-            time.sleep(1)
+            time.sleep(2)
             self.executor_to_preempt.enforcePreemption()
-            return list(self.connections.keys())[0]
+            next_node = list(self.connections.keys())[0]
         else:
             print("Executing node: ", self.id, " ", self.label)
-            time.sleep(1)
-            return list(self.connections.keys())[0]
+            time.sleep(2)
+            next_node = list(self.connections.keys())[0]
+        
+        self.publish("end")
+        return next_node
 
     def printNode(self):
         print("Node: ", self.id, " ", self.label, " ", self.count)
@@ -121,6 +135,7 @@ class AppMakerExecutor:
         self.store = {}
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
+        self.publisher = None
 
         conn_params = ConnectionParameters(
             host='broker.emqx.io',
@@ -139,6 +154,8 @@ class AppMakerExecutor:
 
     def on_message(self, message):
         print("Received model")
+        print("Feedback on:", message['feedbackTopic'])
+        self.publisher = self.commlib_node.create_publisher(topic=message['feedbackTopic'])
         self.load_model(message)
         self.execute()
 
@@ -190,13 +207,18 @@ class AppMakerExecutor:
                     self.executorUpdate(n, executor_id)
             
     def load_model(self, model):
+        self.nodes = {}
+        self.store = {}
+        self.node_executors = {}
+        self.nodes_assigned_to_executors = {}
+        
         # Load the model from the file
         nodes = model['nodes']
         edges = model['edges']
         # store = model['store']
 
         for n in nodes:
-            n = Node(n)
+            n = Node(n, self.publisher)
             self.nodes[n.id] = n
 
         for e in edges:
@@ -263,12 +285,18 @@ class AppMakerExecutor:
                                 break
 
     def execute(self):
+        self.publisher.publish({
+            "program": "start"
+        })
         # Find the start executor and deploy it
         for e in self.node_executors:
             if self.node_executors[e].execType == "start":
                 self.node_executors[e].execute()
                 break
         print("Execution finished")
+        self.publisher.publish({
+            "program": "end"
+        })
 
 if __name__ == "__main__":
     amexe = AppMakerExecutor()
