@@ -48,6 +48,12 @@ class Node:
             time.sleep(2)
             l = random.randint(0, len(self.connections) - 1)
             next_node = list(self.connections.keys())[l]
+        elif self.label == "Random":
+            # Select one of the outputs at random
+            print("Executing node: ", self.id, " ", self.label)
+            time.sleep(2)
+            l = random.randint(0, len(self.connections) - 1)
+            next_node = list(self.connections.keys())[l]
         elif self.label == "End":
             time.sleep(2)
             next_node = None
