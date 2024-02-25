@@ -294,11 +294,17 @@ class AppMakerExecutor:
         self.publisher.publish({
             "program": "start"
         })
-        # Find the start executor and deploy it
-        for e in self.node_executors:
-            if self.node_executors[e].execType == "start":
-                self.node_executors[e].execute()
+        # Gather all start nodes and execute them in threads
+        start_executors = [self.node_executors[e] for e in self.node_executors if self.node_executors[e].execType == "start"]
+        for s in start_executors:
+            s.executeThreaded()
+
+        # Wait for all start nodes to finish
+        while True:
+            time.sleep(0.1)
+            if all([self.node_executors[e].finished for e in self.node_executors if self.node_executors[e].execType == "start"]):
                 break
+
         print("Execution finished")
         self.publisher.publish({
             "program": "end"
