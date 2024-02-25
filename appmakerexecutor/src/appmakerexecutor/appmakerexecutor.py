@@ -45,9 +45,21 @@ class Node:
         if self.label == "Condition":
             # Select one of the outputs at random
             print("Executing node: ", self.id, " ", self.label)
+            next_node_index = 0
+            for p in self.parameters:
+                print(p['id'], " ", p['value'])
+                # Evaluate the condition
+                result = False
+                try:
+                    result = eval(str(p['value']))
+                    print("Result: ", result)
+                except Exception as e:
+                    print("Error in evaluating the condition", e) 
+                if result:
+                    break
+                next_node_index += 1 
             time.sleep(2)
-            l = random.randint(0, len(self.connections) - 1)
-            next_node = list(self.connections.keys())[l]
+            next_node = list(self.connections.keys())[next_node_index]
         elif self.label == "Random":
             # Select one of the outputs at random
             print("Executing node: ", self.id, " ", self.label)
