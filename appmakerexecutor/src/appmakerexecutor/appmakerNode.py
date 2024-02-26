@@ -11,6 +11,7 @@ class Node:
         self.count = data['data']['count']
         self.parameters = data['data']['parameters'] if 'parameters' in data['data'] else []
         self.connections = {}
+        self.connection_list = []
         self.is_preempted = False
         # In case of thread split, we need to keep the executors
         self.executors = {}
@@ -21,6 +22,7 @@ class Node:
 
     def addConnection(self, node, connection):
         self.connections[node.id] = connection
+        self.connection_list.append(connection['target'])
 
     def publish(self, message):
         if self.publisher != None:
@@ -77,8 +79,19 @@ class Node:
         # Select one of the outputs at random
         print("Executing node: ", self.id, " ", self.label)
         time.sleep(1)
-        l = random.randint(0, len(self.connections) - 1)
-        return list(self.connections.keys())[l]
+        # Gather all the parameters
+        probabilities = [float(x['value']) for x in self.parameters]
+        prob_sum = sum(probabilities)
+        random_prob = random.uniform(0, prob_sum)
+        print(self.connection_list)
+        print("Random probability: ", random_prob)
+        for i in range(len(probabilities)):
+            if random_prob < probabilities[i]:
+                print("Selected: ", i)
+                return self.connection_list[i]
+            random_prob -= probabilities[i]
+        print("Something went wrong, returning the last connection")
+        return self.connection_list[-1]
     
     def executeThreadSplit(self):
         # We must start the executors threaded
@@ -107,8 +120,12 @@ class Node:
     def executeDelay(self):
         # Wait for the delay time
         print("Executing node: ", self.id, " ", self.label)
+        print(self.parameters[0])
+        if 'value' not in self.parameters[0]:
+            print("Delay parameter not found")
+            return None
         print("Delay: ", self.parameters[0]['value'])
-        time.sleep(int(self.parameters[0]['value']))
+        time.sleep(float(self.parameters[0]['value']))
         return list(self.connections.keys())[0]
     
     def executeGeneral(self):
