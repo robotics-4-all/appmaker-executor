@@ -120,7 +120,7 @@ class Node:
     def executeDelay(self):
         # Wait for the delay time
         print("Executing node: ", self.id, " ", self.label)
-        print(self.parameters[0])
+        print(self.parameters)
         if 'value' not in self.parameters[0]:
             print("Delay parameter not found")
             return None
