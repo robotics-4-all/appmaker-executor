@@ -7,34 +7,66 @@ from appmakerNodeExecutor import NodeExecutor
 
 class AppMakerExecutor:
     def __init__(self):
-        self.nodes = {}
-        self.store = {}
-        self.node_executors = {}
-        self.nodes_assigned_to_executors = {}
-        self.publisher = None
+            """
+            Initializes the AppMakerExecutor object.
 
-        conn_params = ConnectionParameters(
-            host='broker.emqx.io',
-            port=1883,
-        )
+            This method sets up the necessary attributes and establishes a connection to the MQTT broker.
+            It also creates a subscriber to listen for messages on the 'locsys/app_executor/deploy' topic.
 
-        self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
-                connection_params=conn_params,
-                heartbeats=False,
-                debug=True)
-        
-        self.commlib_node.create_subscriber(
-            topic="locsys/app_executor/deploy", 
-            on_message=self.on_message
-        )
+            Args:
+                None
+
+            Returns:
+                None
+            """
+            self.nodes = {}
+            self.store = {}
+            self.node_executors = {}
+            self.nodes_assigned_to_executors = {}
+            self.publisher = None
+
+            conn_params = ConnectionParameters(
+                host='broker.emqx.io',
+                port=1883,
+            )
+
+            self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
+                    connection_params=conn_params,
+                    heartbeats=False,
+                    debug=True)
+            
+            self.commlib_node.create_subscriber(
+                topic="locsys/app_executor/deploy", 
+                on_message=self.on_message
+            )
 
     def on_message(self, message):
+        """
+        Handles incoming messages.
+
+        Args:
+            message (dict): The message received.
+
+        Returns:
+            None
+        """
         print("Received model")
         print("Feedback on:", message['feedbackTopic'])
         self.publisher = self.commlib_node.create_publisher(topic=message['feedbackTopic'])
         self.load_model(message)
         self.execute()
 
+    def findCoorespondingThreadJoin(self, thread_split_id):
+        """
+        Finds the corresponding thread join node for a given thread split node.
+
+        Args:
+            thread_split_id (int): The ID of the thread split node.
+
+        Returns:
+            int or None: The ID of the corresponding thread join node if found, None otherwise.
+        """
+        # Rest of the code...
     def findCoorespondingThreadJoin(self, thread_split_id):
         # Find the corresponding thread join node
         neighbors = [self.nodes[thread_split_id].connections[x]['target'] for x in self.nodes[thread_split_id].connections]
@@ -79,14 +111,21 @@ class AppMakerExecutor:
         return None
 
     def executorUpdate(self, node_id, executor_id):
+        """
+        Updates the executor by recursively traversing the graph starting from the given node.
+
+        Args:
+            node_id (int): The ID of the current node.
+            executor_id (int): The ID of the executor.
+
+        Returns:
+            None
+        """
         print("Executor update for node ", self.nodes[node_id].count, ":", executor_id)
         # Check if the node is a terminator (unless the executor starts from the terminator)
         if self.nodes[node_id].label == "End": 
             print("The end was found: ", self.nodes[node_id].count)
             return
-        # elif self.nodes[node_id].label == "Thread join":
-        #     print("The thread join was found: ", node_id, " ", self.nodes[node_id].label, self.nodes[node_id].count)
-        #     return
         elif self.nodes[node_id].label == "Thread split":
             print("A thread split was found: ", self.nodes[node_id].count)
             # Find the corresponding thread join node
@@ -114,6 +153,15 @@ class AppMakerExecutor:
                     self.executorUpdate(n, executor_id)
             
     def load_model(self, model):
+        """
+        Loads the model into the executor.
+
+        Args:
+            model (dict): The model containing nodes and edges.
+
+        Returns:
+            None
+        """
         self.nodes = {}
         self.store = {}
         self.node_executors = {}
@@ -159,7 +207,7 @@ class AppMakerExecutor:
                         print("Thread executor for: ", self.nodes[n].count, "\n\n========================")
                         self.executorUpdate(n, n)
                         print("Executor updated for: ", self.nodes[n].count, "\n\n========================")
-                        # Addinng the threads as executors to node
+                        # Adding the threads as executors to node
                         self.nodes[id].executors[n] = self.node_executors[n]
 
         print("Executors: ")
@@ -192,21 +240,25 @@ class AppMakerExecutor:
                                 break
 
     def execute(self):
-        self.publisher.publish({
-            "program": "start"
-        })
-        # Gather all start nodes and execute them in threads
-        start_executors = [self.node_executors[e] for e in self.node_executors if self.node_executors[e].execType == "start"]
-        for s in start_executors:
-            s.executeThreaded()
+            """
+            Executes the program by publishing a "start" message, executing all start nodes in threads,
+            waiting for all start nodes to finish, and then publishing an "end" message.
+            """
+            self.publisher.publish({
+                "program": "start"
+            })
+            # Gather all start nodes and execute them in threads
+            start_executors = [self.node_executors[e] for e in self.node_executors if self.node_executors[e].execType == "start"]
+            for s in start_executors:
+                s.executeThreaded()
 
-        # Wait for all start nodes to finish
-        while True:
-            time.sleep(0.1)
-            if all([self.node_executors[e].finished for e in self.node_executors if self.node_executors[e].execType == "start"]):
-                break
+            # Wait for all start nodes to finish
+            while True:
+                time.sleep(0.1)
+                if all([self.node_executors[e].finished for e in self.node_executors if self.node_executors[e].execType == "start"]):
+                    break
 
-        print("Execution finished")
-        self.publisher.publish({
-            "program": "end"
-        })
+            print("Execution finished")
+            self.publisher.publish({
+                "program": "end"
+            })
