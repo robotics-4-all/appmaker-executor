@@ -1,10 +1,12 @@
 import time
 import random
+import re
 
 class Node:
-    def __init__(self, data, publisher=None):
+    def __init__(self, data, publisher=None, storageHandler=None):
         self.data = data
         self.publisher = publisher
+        self.storageHandler = storageHandler
         self.id = data['id']
         self.label = data['data']['label']
         self.toolbox = data['data']['toolbox']
@@ -75,87 +77,97 @@ class Node:
                 next_node = self.executePreempt()
             elif self.label == "Delay":
                 next_node = self.executeDelay()
+            elif self.label == "Create variable" or self.label == "Set variable":
+                next_node = self.executeSetVariable()
             else: # All other nodes
                 next_node = self.executeGeneral()
             
             self.publish("end")
             return next_node
     
+    def executeSetVariable(self):
+        variable_name = self.parameters[0]['value']
+        variable_value = self.parameters[1]['value']
+        evaluated = self.storageHandler.evaluate(variable_value)
+        print("Setting variable: ", variable_name, " ", evaluated)
+        self.storageHandler.set(variable_name, evaluated)
+        return list(self.connections.keys())[0]
+    
     def executeCondition(self):
-            """
-            Executes the condition of the node and returns the next node to be executed.
+        """
+        Executes the condition of the node and returns the next node to be executed.
 
-            This method evaluates the conditions specified in the node's parameters and selects the next node
-            based on the first condition that evaluates to True. If none of the conditions evaluate to True,
-            the method returns None.
+        This method evaluates the conditions specified in the node's parameters and selects the next node
+        based on the first condition that evaluates to True. If none of the conditions evaluate to True,
+        the method returns None.
 
-            Returns:
-                str: The ID of the next node to be executed.
-            """
-            # Select one of the outputs at random
-            print("Executing node: ", self.id, " ", self.label)
-            next_node_index = 0
-            for p in self.parameters:
-                print(p['id'], " ", p['value'])
-                # Evaluate the condition
-                result = False
-                try:
-                    result = eval(str(p['value']))
-                    print("Result: ", result)
-                except Exception as e:
-                    print("Error in evaluating the condition", e) 
-                if result:
-                    break
-                next_node_index += 1 
-            time.sleep(1)
-            return list(self.connections.keys())[next_node_index]
+        Returns:
+            str: The ID of the next node to be executed.
+        """
+        # Select one of the outputs at random
+        print("Executing node: ", self.id, " ", self.label)
+        next_node_index = 0
+        for p in self.parameters:
+            print(p['id'], " ", p['value'])
+            # Evaluate the condition
+            result = False
+            try:
+                result = eval(str(p['value']))
+                print("Result: ", result)
+            except Exception as e:
+                print("Error in evaluating the condition", e) 
+            if result:
+                break
+            next_node_index += 1 
+        time.sleep(1)
+        return list(self.connections.keys())[next_node_index]
 
     def executeRandom(self):
-            """
-            Executes the node by randomly selecting one of the outputs based on the probabilities assigned to each output.
+        """
+        Executes the node by randomly selecting one of the outputs based on the probabilities assigned to each output.
 
-            Returns:
-                The selected output connection.
-            """
-            # Select one of the outputs at random
-            print("Executing node: ", self.id, " ", self.label)
-            time.sleep(1)
-            # Gather all the parameters
-            probabilities = [float(x['value']) for x in self.parameters]
-            prob_sum = sum(probabilities)
-            random_prob = random.uniform(0, prob_sum)
-            print(self.connection_list)
-            print("Random probability: ", random_prob)
-            for i in range(len(probabilities)):
-                if random_prob < probabilities[i]:
-                    print("Selected: ", i)
-                    return self.connection_list[i]
-                random_prob -= probabilities[i]
-            print("Something went wrong, returning the last connection")
-            return self.connection_list[-1]
+        Returns:
+            The selected output connection.
+        """
+        # Select one of the outputs at random
+        print("Executing node: ", self.id, " ", self.label)
+        time.sleep(1)
+        # Gather all the parameters
+        probabilities = [float(x['value']) for x in self.parameters]
+        prob_sum = sum(probabilities)
+        random_prob = random.uniform(0, prob_sum)
+        print(self.connection_list)
+        print("Random probability: ", random_prob)
+        for i in range(len(probabilities)):
+            if random_prob < probabilities[i]:
+                print("Selected: ", i)
+                return self.connection_list[i]
+            random_prob -= probabilities[i]
+        print("Something went wrong, returning the last connection")
+        return self.connection_list[-1]
     
     def executeThreadSplit(self):
-            """
-            Executes the node in a threaded manner.
+        """
+        Executes the node in a threaded manner.
 
-            This method starts the executors threaded and waits for them to finish.
-            It prints the node ID and label before executing the threads.
-            """
-            # We must start the executors threaded
-            time.sleep(1)
-            print("Executing node: ", self.id, " ", self.label)
-            if self.executors:
-                print("Executing threads")
-                for e in self.executors:
-                    self.executors[e].finished = False
-                    self.executors[e].executeThreaded()
-                print("Waiting for threads to finish") 
-                while True:
-                    time.sleep(0.1)
-                    if all([self.executors[e].finished for e in self.executors]):
-                        print("Threads finished")
-                        break
-            return self.nextJoin
+        This method starts the executors threaded and waits for them to finish.
+        It prints the node ID and label before executing the threads.
+        """
+        # We must start the executors threaded
+        time.sleep(1)
+        print("Executing node: ", self.id, " ", self.label)
+        if self.executors:
+            print("Executing threads")
+            for e in self.executors:
+                self.executors[e].finished = False
+                self.executors[e].executeThreaded()
+            print("Waiting for threads to finish") 
+            while True:
+                time.sleep(0.1)
+                if all([self.executors[e].finished for e in self.executors]):
+                    print("Threads finished")
+                    break
+        return self.nextJoin
     
     def executePreempt(self):
         """
@@ -175,21 +187,21 @@ class Node:
         return list(self.connections.keys())[0]
     
     def executeDelay(self):
-            """
-            Executes the delay node by waiting for the specified delay time.
+        """
+        Executes the delay node by waiting for the specified delay time.
 
-            Returns:
-                str: The ID of the next connected node.
-            """
-            # Wait for the delay time
-            print("Executing node: ", self.id, " ", self.label)
-            print(self.parameters)
-            if 'value' not in self.parameters[0]:
-                print("Delay parameter not found")
-                return None
-            print("Delay: ", self.parameters[0]['value'])
-            time.sleep(float(self.parameters[0]['value']))
-            return list(self.connections.keys())[0]
+        Returns:
+            str: The ID of the next connected node.
+        """
+        # Wait for the delay time
+        print("Executing node: ", self.id, " ", self.label)
+        print(self.parameters)
+        if 'value' not in self.parameters[0]:
+            print("Delay parameter not found")
+            return None
+        print("Delay: ", self.parameters[0]['value'])
+        time.sleep(float(self.parameters[0]['value']))
+        return list(self.connections.keys())[0]
     
     def executeGeneral(self):
         """

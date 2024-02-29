@@ -1,44 +1,67 @@
+"""
+This module contains the implementation of the AppMakerExecutor class, 
+which is responsible for executing the model received from the AppMaker.
+
+The AppMakerExecutor class initializes the necessary attributes, 
+establishes a connection to the MQTT broker, and creates a subscriber 
+to listen for messages on the 'locsys/app_executor/deploy' topic.
+
+The class also provides methods for handling incoming messages, finding 
+corresponding thread join nodes, updating the executor recursively, and 
+loading the model into the executor.
+
+Example usage:
+    executor = AppMakerExecutor()
+    executor.load_model(model)
+    executor.execute()
+"""
+
 import time
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters
 
 from appmakerNode import Node
 from appmakerNodeExecutor import NodeExecutor
+from appmakerStorage import StorageHandler
 
 class AppMakerExecutor:
+    """
+    The AppMakerExecutor class is responsible for executing the model received from the AppMaker.
+    """
+
     def __init__(self):
-            """
-            Initializes the AppMakerExecutor object.
+        """
+        Initializes the AppMakerExecutor object.
 
-            This method sets up the necessary attributes and establishes a connection to the MQTT broker.
-            It also creates a subscriber to listen for messages on the 'locsys/app_executor/deploy' topic.
+        This method sets up the necessary attributes and establishes a connection to the MQTT broker.
+        It also creates a subscriber to listen for messages on the 'locsys/app_executor/deploy' topic.
 
-            Args:
-                None
+        Args:
+            None
 
-            Returns:
-                None
-            """
-            self.nodes = {}
-            self.store = {}
-            self.node_executors = {}
-            self.nodes_assigned_to_executors = {}
-            self.publisher = None
+        Returns:
+            None
+        """
+        self.nodes = {}
+        self.store = {}
+        self.node_executors = {}
+        self.nodes_assigned_to_executors = {}
+        self.publisher = None
 
-            conn_params = ConnectionParameters(
-                host='broker.emqx.io',
-                port=1883,
-            )
+        conn_params = ConnectionParameters(
+            host='broker.emqx.io',
+            port=1883,
+        )
 
-            self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
-                    connection_params=conn_params,
-                    heartbeats=False,
-                    debug=True)
-            
-            self.commlib_node.create_subscriber(
-                topic="locsys/app_executor/deploy", 
-                on_message=self.on_message
-            )
+        self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
+                connection_params=conn_params,
+                heartbeats=False,
+                debug=True)
+        
+        self.commlib_node.create_subscriber(
+            topic="locsys/app_executor/deploy", 
+            on_message=self.on_message
+        )
 
     def on_message(self, message):
         """
@@ -64,10 +87,8 @@ class AppMakerExecutor:
             thread_split_id (int): The ID of the thread split node.
 
         Returns:
-            int or None: The ID of the corresponding thread join node if found, None otherwise.
+            int: The ID of the corresponding thread join node.
         """
-        # Rest of the code...
-    def findCoorespondingThreadJoin(self, thread_split_id):
         # Find the corresponding thread join node
         neighbors = [self.nodes[thread_split_id].connections[x]['target'] for x in self.nodes[thread_split_id].connections]
         print("\nInitial thread neighbors: ", [self.nodes[x].count for x in neighbors])
@@ -166,6 +187,7 @@ class AppMakerExecutor:
         self.store = {}
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
+        self.storage = StorageHandler()
         
         # Load the model from the file
         nodes = model['nodes']
@@ -173,7 +195,7 @@ class AppMakerExecutor:
 
         # Create the nodes
         for n in nodes:
-            n = Node(n, self.publisher)
+            n = Node(n, self.publisher, self.storage)
             self.nodes[n.id] = n
 
         # Create the edges
@@ -247,6 +269,7 @@ class AppMakerExecutor:
             self.publisher.publish({
                 "program": "start"
             })
+
             # Gather all start nodes and execute them in threads
             start_executors = [self.node_executors[e] for e in self.node_executors if self.node_executors[e].execType == "start"]
             for s in start_executors:
