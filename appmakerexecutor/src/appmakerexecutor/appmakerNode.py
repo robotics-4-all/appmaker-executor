@@ -49,7 +49,8 @@ class Node:
             if self.publisher != None:
                 self.publisher.publish({
                     "node_id": self.id,
-                    "message": message
+                    "message": message,
+                    "label": self.label,
                 })
 
     def execute(self):
@@ -79,13 +80,38 @@ class Node:
                 next_node = self.executeDelay()
             elif self.label == "Create variable" or self.label == "Set variable":
                 next_node = self.executeSetVariable()
+            elif self.label == "Log":
+                next_node = self.executeLog()
             else: # All other nodes
                 next_node = self.executeGeneral()
             
             self.publish("end")
             return next_node
     
+    def executeLog(self):
+        """
+        Executes the log operation.
+
+        This method logs the message to the console and returns the key of the first connection.
+
+        Returns:
+            str: The key of the first connection.
+        """
+        message = self.parameters[0]['value']
+        message = self.storageHandler.replaceVariables(message)
+        print("Log: ", message)
+        self.publish(message)
+        return list(self.connections.keys())[0]
+
     def executeSetVariable(self):
+        """
+        Executes the set variable operation.
+        
+        Sets the value of a variable with the given name to the evaluated value of the provided expression.
+        
+        Returns:
+            str: The key of the first connection.
+        """
         variable_name = self.parameters[0]['value']
         variable_value = self.parameters[1]['value']
         evaluated = self.storageHandler.evaluate(variable_value)

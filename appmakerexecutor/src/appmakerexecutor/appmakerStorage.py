@@ -76,3 +76,21 @@ class StorageHandler:
         except Exception as e:
             print("Error during evaluation: ", e)
             return None
+        
+    def replaceVariables(self, expression):
+        """
+        Replace variables in an expression with their values.
+
+        Args:
+            expression (str): The expression to replace variables in.
+
+        Returns:
+            The expression with variables replaced by their values.
+        """
+        pattern = r'\{([^}]*)\}'
+        matches = re.findall(pattern, expression)
+        for match in matches:
+            variable_value = self.get(match)
+            if variable_value is not None:
+                expression = expression.replace("{" + match + "}", str(variable_value))
+        return expression
