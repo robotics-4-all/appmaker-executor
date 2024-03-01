@@ -97,10 +97,17 @@ class Node:
         Returns:
             str: The key of the first connection.
         """
+        time.sleep(1)
         message = self.parameters[0]['value']
         message = self.storageHandler.replaceVariables(message)
         print("Log: ", message)
-        self.publish(message)
+        # Get current time in literal format
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        self.publish({
+            "message": message, 
+            "timestamp": timestamp,
+            "node_count": self.count,
+        })
         return list(self.connections.keys())[0]
 
     def executeSetVariable(self):
@@ -112,6 +119,7 @@ class Node:
         Returns:
             str: The key of the first connection.
         """
+        time.sleep(1)
         variable_name = self.parameters[0]['value']
         variable_value = self.parameters[1]['value']
         evaluated = self.storageHandler.evaluate(variable_value)
