@@ -146,10 +146,10 @@ class Node:
             # Evaluate the condition
             result = False
             try:
-                result = eval(str(p['value']))
+                result = self.storageHandler.evaluate(str(p['value']))
                 print("Result: ", result)
             except Exception as e:
-                print("Error in evaluating the condition", e) 
+                print("Error in evaluating the condition: ", e) 
             if result:
                 break
             next_node_index += 1 
