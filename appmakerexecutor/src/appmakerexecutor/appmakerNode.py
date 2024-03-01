@@ -142,7 +142,7 @@ class Node:
         print("Executing node: ", self.id, " ", self.label)
         next_node_index = 0
         for p in self.parameters:
-            print(p['id'], " ", p['value'])
+            print(">>", p['id'], " ", p['value'])
             # Evaluate the condition
             result = False
             try:
@@ -154,6 +154,7 @@ class Node:
                 break
             next_node_index += 1 
         time.sleep(1)
+        print("Selected form condition: ", next_node_index)
         return list(self.connections.keys())[next_node_index]
 
     def executeRandom(self):

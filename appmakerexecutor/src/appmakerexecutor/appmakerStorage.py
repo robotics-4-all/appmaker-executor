@@ -10,6 +10,19 @@ class StorageHandler:
     """
     def __init__(self):
         self.storage = {}
+        self.publisher = None
+
+    def setPublisher(self, publisher):
+        """
+        Set the publisher of the app.
+
+        Args:
+            publisher (str): The name of the publisher.
+
+        Returns:
+            None
+        """
+        self.publisher = publisher
 
     def get(self, key):
         """
@@ -36,6 +49,13 @@ class StorageHandler:
         """
         self.storage[key] = value
         print("Value set: ", key, " ", value)
+        if self.publisher is not None:
+            self.publisher.publish({
+                "type": "storage",
+                "action": "set",
+                "key": key,
+                "value": value
+            })
         return True
     
     def delete(self, key):

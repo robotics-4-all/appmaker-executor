@@ -266,6 +266,8 @@ class AppMakerExecutor:
             Executes the program by publishing a "start" message, executing all start nodes in threads,
             waiting for all start nodes to finish, and then publishing an "end" message.
             """
+            self.storage.setPublisher(self.publisher)
+
             self.publisher.publish({
                 "program": "start"
             })
