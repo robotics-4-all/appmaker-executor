@@ -166,8 +166,8 @@ class Node:
         # Select one of the outputs at random
         print("Executing node: ", self.id, " ", self.label)
         time.sleep(1)
-        # Gather all the parameters
-        probabilities = [float(x['value']) for x in self.parameters]
+        # Gather all the parameters and evaluate them
+        probabilities = [self.storageHandler.evaluate(x['value']) for x in self.parameters]
         prob_sum = sum(probabilities)
         random_prob = random.uniform(0, prob_sum)
         print(self.connection_list)
@@ -233,8 +233,9 @@ class Node:
         if 'value' not in self.parameters[0]:
             print("Delay parameter not found")
             return None
-        print("Delay: ", self.parameters[0]['value'])
-        time.sleep(float(self.parameters[0]['value']))
+        delay = self.storageHandler.evaluate(self.parameters[0]['value'])
+        print("Delay: ", delay)
+        time.sleep(float(delay))
         return list(self.connections.keys())[0]
     
     def executeGeneral(self):
