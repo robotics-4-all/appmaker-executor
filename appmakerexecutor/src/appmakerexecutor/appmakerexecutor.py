@@ -184,7 +184,7 @@ class AppMakerExecutor:
             None
         """
         self.nodes = {}
-        self.store = {}
+        self.store = model['store']
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
         self.storage = StorageHandler()
@@ -192,10 +192,11 @@ class AppMakerExecutor:
         # Load the model from the file
         nodes = model['nodes']
         edges = model['edges']
+        brokers = self.store['storeBrokers']
 
         # Create the nodes
         for n in nodes:
-            n = Node(n, self.publisher, self.storage)
+            n = Node(n, self.publisher, self.storage, brokers)
             self.nodes[n.id] = n
 
         # Create the edges
@@ -287,3 +288,7 @@ class AppMakerExecutor:
             self.publisher.publish({
                 "program": "end"
             })
+
+            # Stop all nodes
+            for n in self.nodes:
+                self.nodes[n].stop()
