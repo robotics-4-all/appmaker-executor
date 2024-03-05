@@ -159,6 +159,8 @@ class Node:
                         correct_broker,
                         self.data['data']['parameters'],
                     )
+            # articifial delay
+            time.sleep(0.5)
 
             self.publish("end")
             return next_node
@@ -172,7 +174,6 @@ class Node:
         Returns:
             str: The key of the first connection.
         """
-        time.sleep(1)
         message = self.parameters[0]['value']
         message = self.storageHandler.replaceVariables(message)
         print("Log: ", message)
@@ -194,7 +195,6 @@ class Node:
         Returns:
             str: The key of the first connection.
         """
-        time.sleep(1)
         variable_name = self.parameters[0]['value']
         variable_value = self.parameters[1]['value']
         evaluated = self.storageHandler.evaluate(variable_value)
@@ -228,7 +228,6 @@ class Node:
             if result:
                 break
             next_node_index += 1 
-        time.sleep(1)
         print("Selected form condition: ", next_node_index)
         return list(self.connections.keys())[next_node_index]
 
@@ -241,7 +240,6 @@ class Node:
         """
         # Select one of the outputs at random
         print("Executing node: ", self.id, " ", self.label)
-        time.sleep(1)
         # Gather all the parameters and evaluate them
         probabilities = [self.storageHandler.evaluate(x['value']) for x in self.parameters]
         prob_sum = sum(probabilities)
@@ -264,7 +262,6 @@ class Node:
         It prints the node ID and label before executing the threads.
         """
         # We must start the executors threaded
-        time.sleep(1)
         print("Executing node: ", self.id, " ", self.label)
         if self.executors:
             print("Executing threads")
@@ -292,7 +289,6 @@ class Node:
             str: The key of the first connection in the `connections` dictionary.
         """
         print("Executing node: ", self.id, " ", self.label)
-        time.sleep(1)
         self.executor_to_preempt.enforcePreemption()
         return list(self.connections.keys())[0]
     
@@ -324,7 +320,6 @@ class Node:
             str: The key of the first connection.
         """
         print("Executing node: ", self.id, " ", self.label)
-        time.sleep(1)
         return list(self.connections.keys())[0]
 
     def printNode(self):

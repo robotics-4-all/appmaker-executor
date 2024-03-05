@@ -5,6 +5,7 @@ This module provides a StorageHandler class for managing key-value storage.
 import re
 import time
 from pprint import pprint as pp
+import copy
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters
@@ -89,13 +90,17 @@ class StorageHandler:
 
             self.actionPublishers[action['topic']] = {
                 "publisher": actionPublisher,
-                "broker": broker
+                "broker": broker,
+                "initial_payload": action['payload']
             }
 
+        print("Publishing the action")
         # Handle the the payload
-        payload = action['payload']
+        payload = copy.deepcopy(self.actionPublishers[action['topic']]['initial_payload'])
+        print("> Payload: ", payload)
         # iterate through the payload and replace the variables
         payload = self.iteratePayload(payload, parameters)
+        print("> Iterated Payload: ", payload)
         # publish it
         self.actionPublishers[action['topic']]['publisher'].publish(payload)
         
@@ -106,7 +111,10 @@ class StorageHandler:
             else:
                 # Search for variables in the parameters
                 pattern = r'\{([^}]*)\}'
-                matches = re.findall(pattern, value)
+                print("Pattern: ", pattern)
+                print("Value: ", value)
+                matches = re.findall(pattern, str(value))
+                print("Matches: ", matches)
                 for match in matches:
                     for p in parameters:
                         if p['id'] == match:

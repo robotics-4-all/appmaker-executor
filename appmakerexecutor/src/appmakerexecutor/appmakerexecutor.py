@@ -99,8 +99,12 @@ class AppMakerExecutor:
             joins_found = 0
             splits_found = 1
             temp_neighbors = set([n])
-            while joins_found < splits_found:
+            visited = set()
+            all_visited = False
+            while joins_found < splits_found and not all_visited:
+                all_visited = True
                 for _n in temp_neighbors:
+                    visited.add(_n)
                     print("Current node: ", self.nodes[_n].count)
                     if self.nodes[_n].label == "Thread join":
                         print("Thread join found: ", self.nodes[_n].count)
@@ -122,6 +126,12 @@ class AppMakerExecutor:
 
                     print("\tCurrent neighbors: ", [self.nodes[x].count for x in temp_neighbors])
                     break
+
+                # Check if all the neighbors were visited
+                for _n in temp_neighbors:
+                    if _n not in visited:
+                        all_visited = False
+                        break
 
         print("Final joins: ", [self.nodes[x].count for x in final_joins], '\n')
         if len(final_joins) == 1:
