@@ -4,6 +4,7 @@ This module provides a StorageHandler class for managing key-value storage.
 
 import re
 import time
+from pprint import pprint as pp
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters
@@ -63,6 +64,58 @@ class StorageHandler:
                 print("Subscriber stopped for action: ", action['topic'])
         else:
             print("Active subscriber not found for action: ", action['topic'])
+
+    def actionPublish(self, action, broker, parameters):
+        if action['topic'] not in self.actionPublishers:
+            # Add it
+            conn_params = ConnectionParameters(
+                host=broker['parameters']['host'],
+                port=broker['parameters']['port'],
+                username=broker['parameters']['username'],
+                password=broker['parameters']['password']
+            )
+            print("Creating publisher for action: ", action['topic'])
+            print("Connection parameters: ", conn_params)
+
+            commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
+                connection_params=conn_params,
+                heartbeats=False,
+                debug=True
+            )
+
+            actionPublisher = commlib_node.create_publisher(
+                topic=action['topic']
+            )
+
+            self.actionPublishers[action['topic']] = {
+                "publisher": actionPublisher,
+                "broker": broker
+            }
+
+        # Handle the the payload
+        payload = action['payload']
+        # iterate through the payload and replace the variables
+        payload = self.iteratePayload(payload, parameters)
+        # publish it
+        self.actionPublishers[action['topic']]['publisher'].publish(payload)
+        
+    def iteratePayload(self, payload, parameters):
+        for key, value in payload.items():
+            if isinstance(value, dict): # or list
+                payload = self.iteratePayload(value, parameters)
+            else:
+                # Search for variables in the parameters
+                pattern = r'\{([^}]*)\}'
+                matches = re.findall(pattern, value)
+                for match in matches:
+                    for p in parameters:
+                        if p['id'] == match:
+                            print("Match found: ", match)
+                            value = value.replace("{" + match + "}", str(p['value']))
+                            print("Value replaced: ", value)
+                            payload[key] = self.evaluate(value)
+                            print("Payload: ", payload)
+        return payload
 
     def setPublisher(self, publisher):
         """

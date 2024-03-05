@@ -105,6 +105,8 @@ class Node:
                 broker_id = None
                 operation = None
                 action = self.data['data']['action']
+
+                # Subscriber
                 if action['type'] == 'subscribe':
                     # Find the broker id:
                     for p in self.data['data']['parameters']:
@@ -139,6 +141,24 @@ class Node:
                         )
                     else:
                         print("Something went wrong with action: ", action, correct_broker, operation)
+
+                elif action['type'] == "publish":
+                    for p in self.data['data']['parameters']:
+                        if p['id'] == 'broker':
+                            broker_id = p['value']
+                            break
+                    # Get broker
+                    correct_broker = None
+                    for b in self.brokers:
+                        if b["id"] == broker_id:
+                            correct_broker = b
+                            break
+
+                    self.storageHandler.actionPublish(
+                        action,
+                        correct_broker,
+                        self.data['data']['parameters'],
+                    )
 
             self.publish("end")
             return next_node
