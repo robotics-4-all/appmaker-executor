@@ -3,6 +3,10 @@ This module provides a StorageHandler class for managing key-value storage.
 """
 
 import re
+import time
+
+from commlib.node import Node as CommlibNode
+from commlib.transports.mqtt import ConnectionParameters
 
 class StorageHandler:
     """
@@ -10,7 +14,55 @@ class StorageHandler:
     """
     def __init__(self):
         self.storage = {}
+        self.actionSubscribers = {}
+        self.actionPublishers = {}
         self.publisher = None
+
+    def startSubscriber(self, action, broker, callback):
+        # Check if topic with the specific broker is already subscribed
+        if action['topic'] in self.actionSubscribers and \
+            self.actionSubscribers[action['topic']]['broker']['parameters']['host'] == broker['parameters']['host']:
+                print("Subscriber already exists for action: ", action['topic'])
+                return
+
+        conn_params = ConnectionParameters(
+            host=broker['parameters']['host'],
+            port=broker['parameters']['port'],
+            username=broker['parameters']['username'],
+            password=broker['parameters']['password']
+        )
+        print("Creating subscriber for action: ", action['topic'])
+        print("Connection parameters: ", conn_params)
+
+        commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
+            connection_params=conn_params,
+            heartbeats=False,
+            debug=True
+        )
+
+        actionSubscriber = commlib_node.create_subscriber(
+            topic=action['topic'],
+            on_message=callback
+        )
+
+        self.actionSubscribers[action['topic']] = {
+            "subscriber": actionSubscriber,
+            "broker": broker
+        }
+
+        print("Executing the subscriber")
+        actionSubscriber.run()
+
+        print("Subscriber created and started")
+
+    def stopSubscriber(self, action, broker):
+        if action['topic'] in self.actionSubscribers and \
+            self.actionSubscribers[action['topic']]['broker']['parameters']['host'] == broker['parameters']['host']:
+                self.actionSubscribers[action['topic']]['subscriber'].stop()
+                del self.actionSubscribers[action['topic']]
+                print("Subscriber stopped for action: ", action['topic'])
+        else:
+            print("Active subscriber not found for action: ", action['topic'])
 
     def setPublisher(self, publisher):
         """
@@ -48,7 +100,7 @@ class StorageHandler:
             True if the value was successfully set.
         """
         self.storage[key] = value
-        print("Value set: ", key, " ", value)
+        # print("Value set: ", key, " ", value)
         if self.publisher is not None:
             self.publisher.publish({
                 "type": "storage",
@@ -114,3 +166,21 @@ class StorageHandler:
             if variable_value is not None:
                 expression = expression.replace("{" + match + "}", str(variable_value))
         return expression
+    
+    def stop(self):
+        """
+        Stop the storage handler.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        for action in self.actionSubscribers:
+            self.actionSubscribers[action]['subscriber'].stop()
+        
+        self.actionSubscribers = {}
+        self.actionPublishers = {}
+        self.publisher = None
+        self.storage = {}   

@@ -289,6 +289,5 @@ class AppMakerExecutor:
                 "program": "end"
             })
 
-            # Stop all nodes
-            for n in self.nodes:
-                self.nodes[n].stop()
+            # Stop everything
+            self.storage.stop()

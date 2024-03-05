@@ -64,30 +64,6 @@ class Node:
                     "label": self.label,
                 })
 
-    def handleActionSubscriberInitiation(self, action, broker):
-        conn_params = ConnectionParameters(
-            host=broker['parameters']['host'],
-            port=broker['parameters']['port'],
-            username=broker['parameters']['username'],
-            password=broker['parameters']['password']
-        )
-        print("Creating subscriber for action: ", action['topic'])
-        print("Connection parameters: ", conn_params)
-
-        self.commlib_node = CommlibNode(node_name=f"${self.id}_commlib_node",
-            connection_params=conn_params,
-            heartbeats=False,
-            debug=True
-        )
-
-        self.actionSubscriber = self.commlib_node.create_subscriber(
-            topic=action['topic'].replace("/", "."),
-            on_message=self.on_message
-        )
-        print("Subscriber created")
-
-        self.actionSubscriber.run()
-
     def on_message(self, message):
         if self.actionVariable:
             self.storageHandler.set(self.actionVariable, message)
@@ -127,6 +103,7 @@ class Node:
             # Handle actions
             if 'action' in self.data['data']:
                 broker_id = None
+                operation = None
                 action = self.data['data']['action']
                 if action['type'] == 'subscribe':
                     # Find the broker id:
@@ -140,14 +117,28 @@ class Node:
                         if b["id"] == broker_id:
                             correct_broker = b
                             break
+                    # Find the operation. Start or stop?
+                    for p in self.data['data']['parameters']:
+                        if p['id'] == 'operation':
+                            operation = p['value']
+                            break
 
                     self.actionVariable = action['storage']
 
                     print("The correct broker is: ", correct_broker['parameters']['name'])
-                    if broker_id and correct_broker:
-                        self.handleActionSubscriberInitiation(action, correct_broker)
+                    if broker_id and correct_broker and operation == "start":
+                        self.storageHandler.startSubscriber(
+                            action, 
+                            correct_broker,
+                            self.on_message,
+                        )
+                    elif broker_id and correct_broker and operation == "stop":
+                        self.storageHandler.stopSubscriber(
+                            action,
+                            correct_broker,
+                        )
                     else:
-                        print("No broker found for action: ", action)
+                        print("Something went wrong with action: ", action, correct_broker, operation)
 
             self.publish("end")
             return next_node
@@ -328,12 +319,3 @@ class Node:
         for c in self.connections:
             print("\tto ", c)
 
-    def stop(self):
-        """
-        Stops the node and its associated action subscriber.
-        """
-        if self.commlib_node:
-            self.commlib_node.stop()
-            self.commlib_node = None
-            self.actionSubscriber = None
-        print("Node: ", self.id, " ", self.label, " stopped")
