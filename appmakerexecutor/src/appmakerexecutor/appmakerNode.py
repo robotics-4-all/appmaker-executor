@@ -160,7 +160,7 @@ class Node:
                         self.data['data']['parameters'],
                     )
             # articifial delay
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             self.publish("end")
             return next_node
