@@ -31,7 +31,7 @@ class Node:
         # In case of preempt, we need to keep the executor to kill
         self.executor_to_preempt = None
 
-        pprint.pprint(data)
+        # pprint.pprint(data)
 
     def addConnection(self, node, connection):
             """
@@ -160,7 +160,7 @@ class Node:
                         self.data['data']['parameters'],
                     )
             # articifial delay
-            time.sleep(0.1)
+            time.sleep(0.33)
 
             self.publish("end")
             return next_node

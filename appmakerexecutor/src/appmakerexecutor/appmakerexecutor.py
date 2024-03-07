@@ -49,8 +49,10 @@ class AppMakerExecutor:
         self.publisher = None
 
         conn_params = ConnectionParameters(
-            host='broker.emqx.io',
+            host="locsys.issel.ee.auth.gr",
             port=1883,
+            username="r4a",
+            password="r4a123$"
         )
 
         self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
