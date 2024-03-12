@@ -200,6 +200,9 @@ class AppMakerExecutor:
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
         self.storage = StorageHandler()
+
+        # import pprint
+        # pprint.pprint(model)
         
         # Load the model from the file
         nodes = model['nodes']

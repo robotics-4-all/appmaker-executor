@@ -197,6 +197,8 @@ class StorageHandler:
             The result of the expression, or None if an error occurred during evaluation.
         """
         try:
+            # Make the expression a string
+            expression = str(expression)
             print("Evaluating expression: ", expression)
             pattern = r'\{([^}]*)\}'
             matches = re.findall(pattern, expression)

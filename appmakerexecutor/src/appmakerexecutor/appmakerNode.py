@@ -305,6 +305,7 @@ class Node:
         if 'value' not in self.parameters[0]:
             print("Delay parameter not found")
             return None
+        print("Delay parameter: ", self.parameters[0]['value'])
         delay = self.storageHandler.evaluate(self.parameters[0]['value'])
         print("Delay: ", delay)
         time.sleep(float(delay))
