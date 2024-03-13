@@ -55,31 +55,14 @@ class AppMakerExecutor:
             password="r4a123$"
         )
 
-        self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
-                connection_params=conn_params,
-                heartbeats=False,
-                debug=True)
-        
-        self.commlib_node.create_subscriber(
-            topic="locsys/app_executor/deploy", 
-            on_message=self.on_message
+        self.name = f'locsys.app_executor_node_{time.time()}'
+        self.commlib_node = CommlibNode(        
+            node_name=self.name,
+            connection_params=conn_params,
+            heartbeats=False,
+            debug=True
         )
-
-    def on_message(self, message):
-        """
-        Handles incoming messages.
-
-        Args:
-            message (dict): The message received.
-
-        Returns:
-            None
-        """
-        print("Received model")
-        print("Feedback on:", message['feedbackTopic'])
-        self.publisher = self.commlib_node.create_publisher(topic=message['feedbackTopic'])
-        self.load_model(message)
-        self.execute()
+        print("Executor name: ", self.name)
 
     def findCoorespondingThreadJoin(self, thread_split_id):
         """
@@ -206,8 +189,8 @@ class AppMakerExecutor:
         edges = model['edges']
         brokers = self.store['storeBrokers']
 
-        import pprint
-        pprint.pprint(self.store["storeNodes"])
+        # import pprint
+        # pprint.pprint(self.store["storeNodes"])
 
         # Create the nodes
         for n in nodes:
