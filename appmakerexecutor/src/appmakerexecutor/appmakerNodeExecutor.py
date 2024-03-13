@@ -26,6 +26,7 @@ class NodeExecutor:
         self.finished = False
         self.to_preempt = False
         self.is_preempted = False
+        self.artificial_delay = 0
 
     def addNode(self, node):
             """
@@ -66,6 +67,7 @@ class NodeExecutor:
             print("Executor: ", self.execType, " started")
             # Make the is_preempted flag of all nodes false
             for n in self.nodes:
+                self.nodes[n].artificial_delay = self.artificial_delay
                 self.nodes[n].is_preempted = False
             self.finished = False
             self.runner = self.starting_node

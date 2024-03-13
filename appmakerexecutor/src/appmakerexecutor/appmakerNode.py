@@ -30,6 +30,7 @@ class Node:
         self.nextJoin = None
         # In case of preempt, we need to keep the executor to kill
         self.executor_to_preempt = None
+        self.artificial_delay = 0
 
         # pprint.pprint(data)
 
@@ -160,7 +161,7 @@ class Node:
                         self.data['data']['parameters'],
                     )
             # articifial delay
-            time.sleep(0.33)
+            time.sleep(self.storageHandler.evaluate(self.artificial_delay))
 
             self.publish("end")
             return next_node

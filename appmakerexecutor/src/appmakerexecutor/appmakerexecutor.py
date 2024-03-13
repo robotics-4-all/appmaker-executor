@@ -200,14 +200,14 @@ class AppMakerExecutor:
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
         self.storage = StorageHandler()
-
-        # import pprint
-        # pprint.pprint(model)
         
         # Load the model from the file
         nodes = model['nodes']
         edges = model['edges']
         brokers = self.store['storeBrokers']
+
+        import pprint
+        pprint.pprint(self.store["storeNodes"])
 
         # Create the nodes
         for n in nodes:
@@ -226,6 +226,17 @@ class AppMakerExecutor:
                 self.node_executors[id] = NodeExecutor("start")
                 self.node_executors[id].setStartingNode(id)
                 self.node_executors[id].addNode(self.nodes[id])
+
+                # Find artificial delay
+                self.node_executors[id].artificial_delay = self.nodes[id].parameters[0]['value']
+                for n in self.store["storeNodes"]:
+                    if n["id"] == id and "parameters" in n and "parameters" in n["parameters"] and len(n["parameters"]["parameters"]) > 0:
+                        delay_in_param = n["parameters"]["parameters"][0]["value"]
+                        if delay_in_param != self.node_executors[id].artificial_delay:
+                            self.node_executors[id].artificial_delay = delay_in_param
+
+                print("Artificial delay: ", self.node_executors[id].artificial_delay)
+                
                 self.nodes_assigned_to_executors[id] = id
                 print("Starting executor for: ", self.nodes[id].count, "\n\n========================")
                 self.executorUpdate(id, id)
