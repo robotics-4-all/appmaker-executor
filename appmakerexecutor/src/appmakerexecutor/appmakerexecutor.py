@@ -50,9 +50,10 @@ class AppMakerExecutor:
 
         conn_params = ConnectionParameters(
             host="locsys.issel.ee.auth.gr",
-            port=1883,
-            username="r4a",
-            password="r4a123$"
+            port=8883,
+            ssl=True,
+            username="sensors",
+            password="issel.sensors"
         )
 
         self.name = f'locsys.app_executor_node_{time.time()}'

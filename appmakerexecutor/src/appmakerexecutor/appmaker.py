@@ -1,7 +1,7 @@
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters
 
-from appmakerExecutor import AppMakerExecutor
+from appmakerexecutor import AppMakerExecutor
 
 def on_message(message):
     """
@@ -18,6 +18,7 @@ def on_message(message):
         print("Feedback on:", message['feedbackTopic'])
         amexe = AppMakerExecutor()
         amexe.publisher = amexe.commlib_node.create_publisher(topic=message['feedbackTopic'])
+        print(message)
         amexe.load_model(message)
         amexe.execute()
         print(f"Model of executor {amexe.name} executed")
@@ -28,12 +29,12 @@ if __name__ == "__main__":
     """
     This script initializes and runs the AppMakerExecutor.
     """
-
     conn_params = ConnectionParameters(
         host="locsys.issel.ee.auth.gr",
-        port=1883,
-        username="r4a",
-        password="r4a123$"
+        port=8883,
+        ssl=True,
+        username="sensors",
+        password="issel.sensors"
     )
 
     commlib_node = CommlibNode(node_name='locsys.app_executor_node',
