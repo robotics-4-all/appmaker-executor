@@ -66,6 +66,7 @@ class Node:
                 })
 
     def on_message(self, message):
+        print("Received message: ", message)
         if self.actionVariable:
             self.storageHandler.set(self.actionVariable, message)
 
@@ -110,8 +111,10 @@ class Node:
                 # Subscriber
                 if action['type'] == 'subscribe':
                     # Find the broker id:
+                    
                     for p in self.data['data']['parameters']:
                         if p['id'] == 'broker':
+                            print("Broker", p)
                             broker_id = p['value']
                             break
                     # Get broker
@@ -121,6 +124,7 @@ class Node:
                             correct_broker = b
                             break
                     # Find the operation. Start or stop?
+                    print(">> Parameters: ", self.data['data']['parameters'])
                     for p in self.data['data']['parameters']:
                         if p['id'] == 'operation':
                             operation = p['value']
@@ -128,13 +132,16 @@ class Node:
 
                     self.actionVariable = action['storage']
 
-                    print("The correct broker is: ", correct_broker['parameters']['name'])
+                    print("The correct broker is: ", correct_broker)
+                    print(broker_id, correct_broker, operation)
                     if broker_id and correct_broker and operation == "start":
+                        print("Attempting to start subscriber")
                         self.storageHandler.startSubscriber(
-                            action, 
+                            action,
                             correct_broker,
                             self.on_message,
                         )
+                        print(">> Subscribing to: ", action['topic'])
                     elif broker_id and correct_broker and operation == "stop":
                         self.storageHandler.stopSubscriber(
                             action,
@@ -175,6 +182,7 @@ class Node:
         Returns:
             str: The key of the first connection.
         """
+        print("Log: ", self.parameters)
         message = self.parameters[0]['value']
         message = self.storageHandler.replaceVariables(message)
         print("Log: ", message)

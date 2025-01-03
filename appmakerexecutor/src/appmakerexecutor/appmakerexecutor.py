@@ -18,18 +18,18 @@ Example usage:
 
 import time
 from commlib.node import Node as CommlibNode
-from commlib.transports.mqtt import ConnectionParameters
+from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 
 from appmakerNode import Node
 from appmakerNodeExecutor import NodeExecutor
 from appmakerStorage import StorageHandler
 
-class AppMakerExecutor:
+class AppMakerExecutor(CommlibNode):
     """
     The AppMakerExecutor class is responsible for executing the model received from the AppMaker.
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         """
         Initializes the AppMakerExecutor object.
 
@@ -47,23 +47,34 @@ class AppMakerExecutor:
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
         self.publisher = None
+        self.feedback_topic = None
 
-        conn_params = ConnectionParameters(
+        self.conn_params = MQTTConnectionParameters(
             host="locsys.issel.ee.auth.gr",
             port=8883,
             ssl=True,
             username="sensors",
-            password="issel.sensors"
+            password="issel.sensors",
+            reconnect_attempts=0,
         )
 
-        self.name = f'locsys.app_executor_node_{time.time()}'
-        self.commlib_node = CommlibNode(        
-            node_name=self.name,
-            connection_params=conn_params,
+        if "feedback_topic" in kwargs:
+            self.feedback_topic = kwargs["feedback_topic"].replace("/", ".")
+        print("Feedback topic: ", self.feedback_topic)
+        del kwargs['feedback_topic']
+
+        super().__init__(
+            connection_params=self.conn_params,
             heartbeats=False,
-            debug=True
+            workers_rpc=10,
+            **kwargs
         )
-        print("Executor name: ", self.name)
+
+        self.publisher = self.create_publisher(
+            topic=self.feedback_topic,
+        )
+        self.run()
+        # print("Executor name: ", self.name)
 
     def findCoorespondingThreadJoin(self, thread_split_id):
         """
@@ -278,13 +289,14 @@ class AppMakerExecutor:
             waiting for all start nodes to finish, and then publishing an "end" message.
             """
             self.storage.setPublisher(self.publisher)
-
+            print(self.publisher)
             self.publisher.publish({
                 "program": "start"
             })
 
             # Gather all start nodes and execute them in threads
             start_executors = [self.node_executors[e] for e in self.node_executors if self.node_executors[e].execType == "start"]
+            print("Start executors: ", start_executors)
             for s in start_executors:
                 s.executeThreaded()
 
