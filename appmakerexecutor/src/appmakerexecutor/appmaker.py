@@ -1,7 +1,15 @@
+"""
+File that initializes an AppMakerExecutor.
+"""
+
+import os
+import sys
 from pprint import pprint
+from dotenv import load_dotenv
+import logging
 
 from commlib.node import Node as CommlibNode
-from commlib.transports.mqtt import ConnectionParameters
+from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 
 from appmakerexecutor import AppMakerExecutor
 
@@ -23,19 +31,34 @@ def on_message(message):
         amexe.load_model(message)
         amexe.execute()
         print("All done")
-    except Exception as e:
+    except Exception as e: # pylint: disable=broad-except
         print("Error on message: ", e)
 
 if __name__ == "__main__":
-    """
-    This script initializes and runs the AppMakerExecutor.
-    """
-    conn_params = ConnectionParameters(
-        host="locsys.issel.ee.auth.gr",
-        port=8883,
-        ssl=True,
-        username="sensors",
-        password="issel.sensors"
+    if len(sys.argv) < 2:
+        print("You must provide a UID as argument:")
+        print(">> python3 appmaker.py UID")
+        exit(0)
+
+    uid = sys.argv[1]
+
+    load_dotenv()
+    try:
+        broker_host = os.getenv('BROKER_HOST', 'broker.emqx.io')
+        broker_port = int(os.getenv('BROKER_PORT', "8883"))
+        broker_ssl = bool(os.getenv('BROKER_SSL', "True"))
+        broker_username = os.getenv('BROKER_USERNAME', '')
+        broker_password = os.getenv('BROKER_PASSWORD', '')
+    except Exception as e: # pylint: disable=broad-except
+        print("Error: ", e)
+        exit(1)
+
+    conn_params = MQTTConnectionParameters(
+        host=broker_host,
+        port=broker_port,
+        ssl=broker_ssl,
+        username=broker_username,
+        password=broker_password,
     )
 
     commlib_node = CommlibNode(node_name='locsys.app_executor_node',
@@ -44,12 +67,13 @@ if __name__ == "__main__":
         debug=True)
 
     commlib_node.create_subscriber(
-        topic="locsys.app_executor.deploy",
+        topic=f"appcreator.{uid}.deploy",
         on_message=on_message
     )
+    print(f"Subscribed to appcreator.{uid}.deploy")
 
     try:
         commlib_node.run_forever()
-    except Exception as e:
+    except Exception as e: # pylint: disable=broad-except
         print("Error: ", e)
         commlib_node.stop()
