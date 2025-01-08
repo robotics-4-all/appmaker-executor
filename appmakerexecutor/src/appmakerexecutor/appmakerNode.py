@@ -110,19 +110,20 @@ class Node:
 
                 # Subscriber
                 if action['type'] == 'subscribe':
-                    # Find the broker id:
-                    
-                    for p in self.data['data']['parameters']:
-                        if p['id'] == 'broker':
-                            print("Broker", p)
-                            broker_id = p['value']
-                            break
-                    # Get broker
+                    # NOTE: Commenting out since we assume only redis here
+                    # # Find the broker id:
+                    # for p in self.data['data']['parameters']:
+                    #     if p['id'] == 'broker':
+                    #         print("Broker", p)
+                    #         broker_id = p['value']
+                    #         break
+                    # # Get broker
+                    # correct_broker = None
+                    # for b in self.brokers:
+                    #     if b["id"] == broker_id:
+                    #         correct_broker = b
+                    #         break
                     correct_broker = None
-                    for b in self.brokers:
-                        if b["id"] == broker_id:
-                            correct_broker = b
-                            break
                     # Find the operation. Start or stop?
                     print(">> Parameters: ", self.data['data']['parameters'])
                     for p in self.data['data']['parameters']:
@@ -133,8 +134,7 @@ class Node:
                     self.actionVariable = action['storage']
 
                     print("The correct broker is: ", correct_broker)
-                    print(broker_id, correct_broker, operation)
-                    if broker_id and correct_broker and operation == "start":
+                    if operation == "start":
                         print("Attempting to start subscriber")
                         self.storageHandler.startSubscriber(
                             action,
@@ -142,7 +142,7 @@ class Node:
                             self.on_message,
                         )
                         print(">> Subscribing to: ", action['topic'])
-                    elif broker_id and correct_broker and operation == "stop":
+                    elif operation == "stop":
                         self.storageHandler.stopSubscriber(
                             action,
                             correct_broker,
@@ -167,6 +167,25 @@ class Node:
                         correct_broker,
                         self.data['data']['parameters'],
                     )
+
+                elif action['type'] == "rpc":
+                    for p in self.data['data']['parameters']:
+                        if p['id'] == 'broker':
+                            broker_id = p['value']
+                            break
+                    # Get broker
+                    correct_broker = None
+                    for b in self.brokers:
+                        if b["id"] == broker_id:
+                            correct_broker = b
+                            break
+
+                    self.storageHandler.actionRPCCall(
+                        action,
+                        correct_broker,
+                        self.data['data']['parameters'],
+                    )
+
             # articifial delay
             time.sleep(self.storageHandler.evaluate(self.artificial_delay))
 

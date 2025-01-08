@@ -48,20 +48,21 @@ class AppMakerExecutor(CommlibNode):
         self.nodes_assigned_to_executors = {}
         self.publisher = None
         self.feedback_topic = None
+        self.uid = None
+        self.conn_params = None
 
-        self.conn_params = MQTTConnectionParameters(
-            host="locsys.issel.ee.auth.gr",
-            port=8883,
-            ssl=True,
-            username="sensors",
-            password="issel.sensors",
-            reconnect_attempts=0,
-        )
+        if "conn_params" in kwargs:
+            self.conn_params = kwargs["conn_params"]
+        del kwargs['conn_params']
 
         if "feedback_topic" in kwargs:
             self.feedback_topic = kwargs["feedback_topic"].replace("/", ".")
         print("Feedback topic: ", self.feedback_topic)
         del kwargs['feedback_topic']
+        if "uid" in kwargs:
+            self.uid = kwargs["uid"]
+        print("UID: ", self.uid)
+        del kwargs['uid']
 
         super().__init__(
             connection_params=self.conn_params,
@@ -74,7 +75,6 @@ class AppMakerExecutor(CommlibNode):
             topic=self.feedback_topic,
         )
         self.run()
-        # print("Executor name: ", self.name)
 
     def findCoorespondingThreadJoin(self, thread_split_id):
         """
@@ -179,7 +179,7 @@ class AppMakerExecutor(CommlibNode):
                     self.node_executors[executor_id].addNode(self.nodes[n])
                     print("Node", self.nodes[n].count, "added to executor: ", executor_id)
                     self.executorUpdate(n, executor_id)
-            
+
     def load_model(self, model):
         """
         Loads the model into the executor.
