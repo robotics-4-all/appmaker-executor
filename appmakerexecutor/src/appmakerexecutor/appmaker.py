@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 
-from appmakerexecutor import AppMakerExecutor
+from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=import-error
 
 class AppMaker:
     """

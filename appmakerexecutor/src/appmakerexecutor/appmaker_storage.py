@@ -1,0 +1,408 @@
+"""
+This module provides a StorageHandler class for managing key-value storage.
+"""
+
+import re
+import time
+import logging
+import copy
+
+from commlib.node import Node as CommlibNode
+from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
+
+class StorageHandler:
+    """
+    A class to handle storage operations, communication with subscribers,
+    publishers, and RPC clients.
+    Attributes:
+        storage (dict): A dictionary to store key-value pairs.
+        subscribers (dict): A dictionary to store subscribers.
+        publishers (dict): A dictionary to store publishers.
+        rpc_clients (dict): A dictionary to store RPC clients.
+        logger (logging.Logger): A logger instance for logging messages.
+        commlib_node (CommlibNode): A communication library node for handling communication.
+    Methods:
+        __init__():
+            Initializes the StorageHandler instance.
+        startSubscriber(action, broker, callback):
+            Starts a subscriber for a given action and broker.
+        stopSubscriber(action, broker):
+            Stops a subscriber for a given action and broker.
+        actionPublish(action, broker, parameters):
+            Publishes an action to a given broker with specified parameters.
+        actionRPCCall(action, broker, parameters):
+            Makes an RPC call for a given action and broker with specified parameters.
+        iteratePayload(payload, parameters):
+            Iterates through the payload and replaces variables with their values.
+        setPublisher(publisher):
+            Sets the publisher of the app.
+        get(key):
+            Retrieves the value associated with the given key.
+        set(key, value):
+            Sets the value for the given key.
+        delete(key):
+            Deletes the value associated with the given key.
+        evaluate(expression):
+            Evaluates an expression containing variables stored in the storage.
+        replaceVariables(expression):
+            Replaces variables in an expression with their values.
+        stop():
+            Stops the storage handler.
+    """
+    def __init__(self):
+        self.storage = {}
+        self.subscribers = {}
+        self.publishers = {}
+        self.rpc_clients = {}
+        self.publisher = None
+        self.logger = logging.getLogger(__name__)
+
+        self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
+            connection_params=RedisConnectionParameters(
+                socket_timeout=60,
+            ),
+            heartbeats=False,
+            debug=True,
+        )
+        self.commlib_node.run()
+
+    def start_subscriber(self, action, broker, callback):
+        """
+        Starts a subscriber for a given action and broker.
+
+        This method checks if a subscriber for the specified topic and broker
+        already exists. If it does, a warning is logged and the method returns.
+        Otherwise, it creates a new subscriber, stores it in the subscribers
+        dictionary, and starts the subscriber.
+
+        Args:
+            action (dict): A dictionary containing the action details, including
+                           the 'topic' key which specifies the topic to subscribe to.
+            broker (dict): A dictionary containing the broker details, including
+                           the 'parameters' key which contains the broker's parameters.
+            callback (function): A callback function to be called when a message is
+                                 received on the subscribed topic.
+
+        Returns:
+            None
+        """
+        # Check if topic with the specific broker is already subscribed
+        if action['topic'] in self.subscribers and \
+            self.subscribers[action['topic']]['broker']['parameters']['host'] \
+                == broker['parameters']['host']:
+
+            self.logger.warning("Subscriber already exists for action: %s", action['topic'])
+            return
+
+        self.logger.info("Creating subscriber for action: %s", action['topic'])
+        _subscriber = self.commlib_node.create_subscriber(
+            topic=action['topic'],
+            on_message=callback
+        )
+
+        self.subscribers[action['topic']] = {
+            "subscriber": _subscriber,
+            "broker": broker
+        }
+
+        _subscriber.run()
+        self.logger.info("Subscriber created and started")
+
+    def stop_subscriber(self, action, broker):
+        """
+        Stops the subscriber for a given action if it exists and matches the specified broker.
+
+        Args:
+            action (dict): A dictionary containing the action details, including the 'topic'.
+            broker (dict): A dictionary containing the broker details, including 'parameters' and 
+                'host'.
+
+        Logs:
+            Info: Logs a message indicating that the subscriber was stopped for the given action.
+            Error: Logs an error message if no active subscriber is found for the given action.
+        """
+        if action['topic'] in self.subscribers and \
+            self.subscribers[action['topic']]['broker']['parameters']['host'] \
+                == broker['parameters']['host']:
+
+            self.subscribers[action['topic']]['subscriber'].stop()
+            del self.subscribers[action['topic']]
+            self.logger.info("Subscriber stopped for action: %s", action['topic'])
+        else:
+            self.logger.error("Active subscriber not found for action: %s", action['topic'])
+
+    def action_publish(self, action, broker, parameters):
+        """
+        Publishes an action to a specified topic using a publisher.
+
+        If a publisher for the given action topic does not exist, it creates one and stores it.
+        Then, it deep copies the initial payload, iterates through it to replace 
+        variables with the provided parameters, and publishes the modified payload.
+
+        Args:
+            action (dict): A dictionary containing the action details, including the 
+            'topic' and 'payload'.
+            broker (str): The broker information associated with the publisher.
+            parameters (dict): A dictionary of parameters to replace variables in the payload.
+
+        Returns:
+            None
+        """
+        if action['topic'] not in self.publishers:
+            # Add it
+            self.logger.info("Creating publisher for action: %s", action['topic'])
+
+            _publisher = self.commlib_node.create_publisher(
+                topic=action['topic']
+            )
+            _publisher.run()
+
+            self.publishers[action['topic']] = {
+                "publisher": _publisher,
+                "broker": broker,
+                "initial_payload": action['payload']
+            }
+
+        self.logger.info("Publishing the action")
+        # Handle the the payload
+        payload = copy.deepcopy(self.publishers[action['topic']]['initial_payload'])
+        self.logger.info("\tPayload: %s", payload)
+        # iterate through the payload and replace the variables
+        payload = self.iterate_payload(payload, parameters)
+        self.logger.info("\tIterated Payload: %s", payload)
+        # publish it
+        self.publishers[action['topic']]['publisher'].publish(payload)
+
+    def action_rpc_call(self, action, broker, parameters):
+        """
+        Handles the RPC call for a given action.
+
+        This method creates an RPC client if one does not already exist for the given action's 
+        topic.
+        It then prepares the payload, iterates through it to replace variables with the provided 
+        parameters,
+        and makes the RPC call with the prepared payload.
+
+        Args:
+            action (dict): A dictionary containing the action details, including 'topic' and 
+                'payload'.
+            broker (str): The broker information associated with the action.
+            parameters (dict): A dictionary of parameters to replace variables in the payload.
+
+        Returns:
+            response: The response from the RPC call.
+
+        Logs:
+            - Creation of the RPC client for the action's topic.
+            - The initial payload before iteration.
+            - The iterated payload after replacing variables.
+            - The response from the RPC call.
+        """
+        if action['topic'] not in self.rpc_clients:
+            _rpc_call = self.commlib_node.create_rpc_client(
+                rpc_name=action['topic'],
+            )
+            _rpc_call.run()
+            self.logger.info("Creating RPC client for action: %s", action['topic'])
+
+            self.rpc_clients[action['topic']] = {
+                "rpc": _rpc_call,
+                "broker": broker,
+                "initial_payload": action['payload']
+            }
+
+        self.logger.info("RPC calling the action")
+        # Handle the the payload
+        payload = copy.deepcopy(self.rpc_clients[action['topic']]['initial_payload'])
+        self.logger.info("\tPayload: %s", payload)
+        # iterate through the payload and replace the variables
+        payload = self.iterate_payload(payload, parameters)
+        self.logger.info("\tIterated Payload: %s", payload)
+        # publish it
+        response = self.rpc_clients[action['topic']]['rpc'].call(
+            payload,
+            timeout=15,
+        )
+        self.logger.info("RPC called: %s", response)
+
+    def iterate_payload(self, payload, parameters):
+        """
+        Recursively iterates through a payload dictionary, replacing placeholders with corresponding
+        values from parameters.
+
+        Args:
+            payload (dict): The dictionary containing the payload data with placeholders.
+            parameters (list): A list of dictionaries, each containing 'id' and 'value' keys, used 
+                to replace placeholders in the payload.
+
+        Returns:
+            dict: The updated payload dictionary with placeholders replaced by corresponding values
+                from parameters.
+
+        Example:
+            payload = {
+            "key1": "value1",
+            "key2": "{param1}",
+            "key3": {
+                "subkey1": "{param2}"
+            }
+            }
+            parameters = [
+            {"id": "param1", "value": "replaced_value1"},
+            {"id": "param2", "value": "replaced_value2"}
+            ]
+            result = iteratePayload(payload, parameters)
+            # result will be:
+            # {
+            #     "key1": "value1",
+            #     "key2": "replaced_value1",
+            #     "key3": {
+            #         "subkey1": "replaced_value2"
+            #     }
+            # }
+        """
+        for key, value in payload.items():
+            if isinstance(value, dict): # or list
+                payload = self.iterate_payload(value, parameters)
+            else:
+                # Search for variables in the parameters
+                pattern = r'\{([^}]*)\}'
+                self.logger.info("\tPattern: %s", pattern)
+                self.logger.info("\tValue: %s", value)
+                matches = re.findall(pattern, str(value))
+                self.logger.info("\tMatches: %s", matches)
+                for match in matches:
+                    for p in parameters:
+                        if p['id'] == match:
+                            self.logger.info("\tMatch found: %s", match)
+                            value = value.replace("{" + match + "}", str(p['value']))
+                            self.logger.info("\tValue replaced: %s", value)
+                            payload[key] = self.evaluate(value)
+                            self.logger.info("\tPayload: %s", payload)
+        return payload
+
+    def set_publisher(self, publisher):
+        """
+        Set the publisher of the app.
+
+        Args:
+            publisher (str): The name of the publisher.
+
+        Returns:
+            None
+        """
+        self.publisher = publisher
+
+    def get(self, key):
+        """
+        Retrieve the value associated with the given key.
+
+        Args:
+            key (str): The key to retrieve the value for.
+
+        Returns:
+            The value associated with the key, or None if the key does not exist.
+        """
+        return self.storage.get(key)
+
+    def set(self, key, value):
+        """
+        Set the value for the given key.
+
+        Args:
+            key (str): The key to set the value for.
+            value: The value to be stored.
+
+        Returns:
+            True if the value was successfully set.
+        """
+        self.storage[key] = value
+        if self.publisher is not None:
+            self.publisher.publish({
+                "type": "storage",
+                "action": "set",
+                "key": key,
+                "value": value
+            })
+        return True
+
+    def delete(self, key):
+        """
+        Delete the value associated with the given key.
+
+        Args:
+            key (str): The key to delete the value for.
+
+        Returns:
+            True if the value was successfully deleted, False if the key does not exist.
+        """
+        if key in self.storage:
+            del self.storage[key]
+            return True
+        return False
+
+    def evaluate(self, expression):
+        """
+        Evaluate an expression containing variables stored in the storage.
+
+        Args:
+            expression (str): The expression to evaluate.
+
+        Returns:
+            The result of the expression, or None if an error occurred during evaluation.
+        """
+        try:
+            # Make the expression a string
+            expression = str(expression)
+            self.logger.info("- Evaluating expression: %s", expression)
+            pattern = r'\{([^}]*)\}'
+            matches = re.findall(pattern, expression)
+            for match in matches:
+                variable_value = self.get(match)
+                if variable_value is not None:
+                    expression = expression.replace("{" + match + "}", str(variable_value))
+            self.logger.info("- Evaluated expression: %s", expression)
+            return eval(expression) # pylint: disable=eval-used
+        except Exception as e: # pylint: disable=broad-except
+            self.logger.error("- Error during evaluation: %s", e)
+            return None
+
+    def replace_variables(self, expression):
+        """
+        Replace variables in an expression with their values.
+
+        Args:
+            expression (str): The expression to replace variables in.
+
+        Returns:
+            The expression with variables replaced by their values.
+        """
+        pattern = r'\{([^}]*)\}'
+        matches = re.findall(pattern, expression)
+        for match in matches:
+            variable_value = self.get(match)
+            if variable_value is not None:
+                expression = expression.replace("{" + match + "}", str(variable_value))
+        return expression
+
+    def stop(self):
+        """
+        Stop the storage handler.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        try:
+            self.logger.info("Stopping commlib node")
+            self.commlib_node.stop()
+        except: # pylint: disable=bare-except
+            self.logger.error("Error stopping subscribers")
+
+        self.subscribers = {}
+        self.publishers = {}
+        self.rpc_clients = {}
+        self.publisher = None
+        self.storage = {}
