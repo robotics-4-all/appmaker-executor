@@ -341,6 +341,30 @@ class StorageHandler:
             return True
         return False
 
+    def handle_variable_string(self, expression):
+        """
+        Check if the items in the expression can be evaluated.
+
+        Args:
+            expression (str): The expression to check.
+
+        Returns:
+            True if the items in the expression can be evaluated, False otherwise.
+        """
+        value = {} # To suppress the warning
+        try:
+            self.logger.warning("Handling this variable: %s", expression)
+            items = expression.split(".")
+            for i, item in enumerate(items):
+                if i == 0:
+                    value = self.get(item)
+                else:
+                    value = value[item]
+        except Exception as e: # pylint: disable=broad-except
+            self.logger.error("Error during evaluation: %s", e)
+
+        return value
+
     def evaluate(self, expression):
         """
         Evaluate an expression containing variables stored in the storage.
@@ -352,16 +376,7 @@ class StorageHandler:
             The result of the expression, or None if an error occurred during evaluation.
         """
         try:
-            # Make the expression a string
-            expression = str(expression)
-            self.logger.info("- Evaluating expression: %s", expression)
-            pattern = r'\{([^}]*)\}'
-            matches = re.findall(pattern, expression)
-            for match in matches:
-                variable_value = self.get(match)
-                if variable_value is not None:
-                    expression = expression.replace("{" + match + "}", str(variable_value))
-            self.logger.info("- Evaluated expression: %s", expression)
+            expression = self.replace_variables(expression)
             return eval(expression) # pylint: disable=eval-used
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("- Error during evaluation: %s", e)
@@ -377,13 +392,32 @@ class StorageHandler:
         Returns:
             The expression with variables replaced by their values.
         """
-        pattern = r'\{([^}]*)\}'
-        matches = re.findall(pattern, expression)
-        for match in matches:
-            variable_value = self.get(match)
-            if variable_value is not None:
-                expression = expression.replace("{" + match + "}", str(variable_value))
-        return expression
+        try:
+            # Make the expression a string
+            expression = str(expression)
+            self.logger.info("- Evaluating expression: %s", expression)
+            pattern = r'\{([^}]*)\}'
+            matches = re.findall(pattern, expression)
+            for match in matches:
+                variable_value = self.handle_variable_string(match)
+                if variable_value is not None:
+                    expression = expression.replace("{" + match + "}", str(variable_value))
+            self.logger.info("- Replaced expression: %s", expression)
+
+            # Handle evaluations
+            pattern = r"\|(.*?)\|"
+            matches = re.findall(pattern, expression)
+            for match in matches:
+                self.logger.warning("Handling this evaluation: %s", match)
+                variable_value = eval(match) # pylint: disable=eval-used
+                if variable_value is not None:
+                    expression = expression.replace("|" + match + "|", str(variable_value))
+            self.logger.info("- Evaluated expression: %s", expression)
+
+            return expression
+        except Exception as e: # pylint: disable=broad-except
+            self.logger.error("- Error during evaluation: %s", e)
+            return None
 
     def stop(self):
         """

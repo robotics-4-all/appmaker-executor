@@ -249,7 +249,7 @@ class AppMakerNode:
         """
         print("Log: ", self.parameters)
         message = self.parameters[0]['value']
-        message = self.storage_handler.replaceVariables(message)
+        message = self.storage_handler.replace_variables(message)
         print("Log: ", message)
         # Get current time in literal format
         timestamp = time.strftime("%H:%M:%S", time.localtime())
@@ -342,7 +342,7 @@ class AppMakerNode:
         print("Executing node: ", self.id, " ", self.label)
         if self.executors:
             print("Executing threads")
-            for _, executor in self.executors:
+            for _, executor in self.executors.items():
                 executor.finished = False
                 executor.execute_threaded()
             print("Waiting for threads to finish")
@@ -367,7 +367,7 @@ class AppMakerNode:
             str: The key of the first connection in the `connections` dictionary.
         """
         print("Executing node: ", self.id, " ", self.label)
-        self.executor_to_preempt.enforcePreemption()
+        self.executor_to_preempt.enforce_preemption()
         return list(self.connections.keys())[0]
 
     def execute_delay(self):
