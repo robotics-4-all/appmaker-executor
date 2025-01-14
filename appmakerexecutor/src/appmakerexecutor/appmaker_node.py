@@ -226,11 +226,16 @@ class AppMakerNode:
                         correct_broker = b
                         break
 
-                self.storage_handler.action_rpc_call(
+                response = self.storage_handler.action_rpc_call(
                     action,
                     correct_broker,
                     self.data['data']['parameters'],
                 )
+
+                if 'storage' in action:
+                    self.action_variable = action['storage']
+                    if self.action_variable:
+                        self.storage_handler.set(self.action_variable, response)
 
         # articifial delay
         time.sleep(self.storage_handler.evaluate(self.artificial_delay))

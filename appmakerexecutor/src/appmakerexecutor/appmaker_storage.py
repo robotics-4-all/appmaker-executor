@@ -223,7 +223,8 @@ class StorageHandler:
             payload,
             timeout=120,
         )
-        self.logger.info("RPC called: %s", response)
+        self.logger.info("RPC called with response: %s", response)
+        return response
 
     def iterate_payload(self, payload, parameters):
         """
@@ -278,6 +279,8 @@ class StorageHandler:
                             value = value.replace("{" + match + "}", str(p['value']))
                             self.logger.info("\tValue replaced: %s", value)
                             payload[key] = self.evaluate(value)
+                            if payload[key] is None: # Evaluation failed, not a numeric value
+                                payload[key] = str(value)
                             self.logger.info("\tPayload: %s", payload)
         return payload
 
