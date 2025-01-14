@@ -221,7 +221,7 @@ class StorageHandler:
         # publish it
         response = self.rpc_clients[action['topic']]['rpc'].call(
             payload,
-            timeout=15,
+            timeout=120,
         )
         self.logger.info("RPC called: %s", response)
 
