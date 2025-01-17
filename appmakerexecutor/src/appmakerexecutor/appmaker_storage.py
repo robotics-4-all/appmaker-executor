@@ -64,7 +64,33 @@ class StorageHandler:
             heartbeats=False,
             debug=True,
         )
+
+        self.goaldsl_subscriber = self.commlib_node.create_psubscriber(
+            topic="goaldsl.*.event",
+            on_message=self.handle_goaldsl_message
+        )
+
         self.commlib_node.run()
+
+    def handle_goaldsl_message(self, message, topic):
+        """
+        Handle messages received on the goaldsl topic.
+
+        Args:
+            message (dict): The message received on the goaldsl topic.
+
+        Returns:
+            None
+        """
+        self.logger.info("Received message on goaldsl topic: %s", message)
+
+        if self.publisher is not None:
+            self.publisher.publish({
+                "type": "storage",
+                "action": "set",
+                "key": topic,
+                "value": message,
+            })
 
     def start_subscriber(self, action, broker, callback):
         """
