@@ -200,7 +200,7 @@ class AppMakerExecutor(CommlibNode):
         self.store = model['store']
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
-        self.storage = StorageHandler()
+        self.storage = StorageHandler(self.uid)
 
         # Load the model from the file
         nodes = model['nodes']

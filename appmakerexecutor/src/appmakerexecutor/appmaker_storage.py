@@ -6,6 +6,7 @@ import re
 import time
 import logging
 import copy
+import json
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
@@ -49,12 +50,13 @@ class StorageHandler:
         stop():
             Stops the storage handler.
     """
-    def __init__(self):
+    def __init__(self, uid):
         self.storage = {}
         self.subscribers = {}
         self.publishers = {}
         self.rpc_clients = {}
         self.publisher = None
+        self.uid = uid
         self.logger = logging.getLogger(__name__)
 
         self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
@@ -70,7 +72,27 @@ class StorageHandler:
             on_message=self.handle_goaldsl_message
         )
 
+        self.streamsim_rpc_client = self.commlib_node.create_rpc_client(
+            rpc_name=f"streamsim.{self.uid}.set_configuration_local",
+        )
+
         self.commlib_node.run()
+
+    def start_simulation(self, model):
+        """
+        Start the simulation.
+
+        Args:
+            model (dict): The model to use for the simulation.
+
+        Returns:
+            None
+        """
+        self.logger.info("Starting simulation")
+        yamlmodel = json.loads(model)
+        # print(model)
+        self.streamsim_rpc_client.call(yamlmodel)
+        time.sleep(3)
 
     def handle_goaldsl_message(self, message, topic):
         """

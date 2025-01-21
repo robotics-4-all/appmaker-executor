@@ -145,6 +145,8 @@ class AppMakerNode:
             next_node = self.execute_set_variable()
         elif self.label == "Log":
             next_node = self.execute_log()
+        elif self.label == "Start Simulation":
+            next_node = self.start_simulation()
         else: # All other nodes
             next_node = self.execute_general()
 
@@ -242,6 +244,31 @@ class AppMakerNode:
 
         self.publish("end")
         return next_node
+
+    def start_simulation(self):
+        """
+        Starts the simulation process.
+
+        This method performs the following actions:
+        1. Logs the current parameters.
+        2. Retrieves the model from the parameters and initiates the simulation using the 
+            storage handler.
+        3. Generates a timestamp of the current time.
+        4. Publishes a message indicating that the simulation has started, along with the 
+            timestamp and node count.
+
+        Returns:
+            None
+        """
+        print("Starting simulation")
+        model = self.parameters[0]['value']
+        self.storage_handler.start_simulation(model)
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        self.publish({
+            "message": "Simulation started", 
+            "timestamp": timestamp,
+            "node_count": self.count,
+        })
 
     def execute_log(self):
         """
