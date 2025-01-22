@@ -129,7 +129,8 @@ class StorageHandler:
             None
         """
         self.logger.info("Starting goaldsl")
-        tmp = model[1:-1].replace("\\n", "\n")
+        tmp = model[1:-1].replace("\\n", "\n").replace("\\t", "\t").\
+            replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\")
         print(tmp)
         self.goaldsl_start_rpc.call({'model': tmp})
 
