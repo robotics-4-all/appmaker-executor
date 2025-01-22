@@ -81,11 +81,11 @@ class StorageHandler:
         )
 
         self.goaldsl_start_rpc = self.commlib_node.create_rpc_client(
-            rpc_name=f"goaldsl.{self.uid}.deploy",
+            rpc_name=f"goaldsl.{self.uid}.deploy_sync",
         )
 
         self.goaldsl_reset_rpc = self.commlib_node.create_rpc_client(
-            rpc_name=f"goaldsl.{self.uid}.kill_all",
+            rpc_name=f"goaldsl.{self.uid}.killall_sync",
         )
 
         self.commlib_node.run()
