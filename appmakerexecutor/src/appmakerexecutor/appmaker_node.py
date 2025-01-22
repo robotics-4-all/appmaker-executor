@@ -149,6 +149,10 @@ class AppMakerNode:
             next_node = self.start_simulation()
         elif self.label == "Stop Simulation":
             next_node = self.stop_simulation()
+        elif self.label == "Deploy GoalDSL model":
+            next_node = self.deploy_goaldsl()
+        elif self.label == "Stop GoalDSL model":
+            next_node = self.stop_goaldsl()
         else: # All other nodes
             next_node = self.execute_general()
 
@@ -298,6 +302,60 @@ class AppMakerNode:
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
             "message": "Simulation stopped", 
+            "timestamp": timestamp,
+            "node_count": self.count,
+        })
+        time.sleep(3)
+        return list(self.connections.keys())[0]
+
+    def deploy_goaldsl(self):
+        """
+        Deploys the goaldsl model.
+
+        This method starts the goaldsl model using the first parameter's value from the parameters 
+        list.
+        It then deploys the model using the storage handler, publishes a message indicating that the 
+        goaldsl model has started along with the current timestamp and node count, and finally 
+        returns the first connection key.
+
+        Returns:
+            str: The first key from the connections dictionary.
+        """
+
+        print("Starting goaldsl model")
+        model = self.parameters[0]['value']
+        # Start the new one
+        self.storage_handler.deploy_goaldsl(model)
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        self.publish({
+            "message": "Goaldsl started", 
+            "timestamp": timestamp,
+            "node_count": self.count,
+        })
+        time.sleep(1)
+        return list(self.connections.keys())[0]
+
+    def stop_goaldsl(self):
+        """
+        Stops the GoalDSL service and publishes a message with the status.
+
+        This method performs the following steps:
+        1. Prints a message indicating that GoalDSL is stopping.
+        2. Calls the storage handler to stop GoalDSL and prints the response.
+        3. Gets the current local time and formats it as HH:MM:SS.
+        4. Publishes a message containing the stop status, timestamp, and node count.
+        5. Waits for 3 seconds.
+        6. Returns the first key from the connections dictionary.
+
+        Returns:
+            str: The first key from the connections dictionary.
+        """
+        print("Stopping goaldsl")
+        resp = self.storage_handler.stop_goaldsl()
+        print("Goaldsl stopped: ", resp)
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        self.publish({
+            "message": "Goaldsl stopped", 
             "timestamp": timestamp,
             "node_count": self.count,
         })

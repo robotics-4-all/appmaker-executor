@@ -80,6 +80,14 @@ class StorageHandler:
             rpc_name=f"streamsim.{self.uid}.reset",
         )
 
+        self.goaldsl_start_rpc = self.commlib_node.create_rpc_client(
+            rpc_name=f"goaldsl.{self.uid}.deploy",
+        )
+
+        self.goaldsl_reset_rpc = self.commlib_node.create_rpc_client(
+            rpc_name=f"goaldsl.{self.uid}.kill_all",
+        )
+
         self.commlib_node.run()
 
     def start_simulation(self, model):
@@ -108,6 +116,34 @@ class StorageHandler:
         """
         self.logger.info("Resetting simulation")
         self.streamsim_reset_rpc_client.call({})
+        time.sleep(2)
+
+    def deploy_goaldsl(self, model):
+        """
+        Start the goaldsl model.
+
+        Args:
+            model (dict): The model to use for the simulation.
+
+        Returns:
+            None
+        """
+        self.logger.info("Starting goaldsl")
+        print(model)
+        self.goaldsl_start_rpc.call({'model': model})
+
+    def stop_goaldsl(self):
+        """
+        Reset the simulation.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        self.logger.info("Resetting goaldsl")
+        self.goaldsl_reset_rpc.call({})
         time.sleep(2)
 
     def handle_goaldsl_message(self, message, topic):
