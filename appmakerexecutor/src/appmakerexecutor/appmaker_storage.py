@@ -129,8 +129,8 @@ class StorageHandler:
             None
         """
         self.logger.info("Starting goaldsl")
-        print(model)
-        self.goaldsl_start_rpc.call({'model': model})
+        print(model[1:-1])
+        self.goaldsl_start_rpc.call({'model': model[1:-1]})
 
     def stop_goaldsl(self):
         """
