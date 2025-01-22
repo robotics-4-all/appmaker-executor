@@ -72,8 +72,12 @@ class StorageHandler:
             on_message=self.handle_goaldsl_message
         )
 
-        self.streamsim_rpc_client = self.commlib_node.create_rpc_client(
+        self.streamsim_start_rpc_client = self.commlib_node.create_rpc_client(
             rpc_name=f"streamsim.{self.uid}.set_configuration_local",
+        )
+
+        self.streamsim_reset_rpc_client = self.commlib_node.create_rpc_client(
+            rpc_name=f"streamsim.{self.uid}.reset",
         )
 
         self.commlib_node.run()
@@ -90,9 +94,21 @@ class StorageHandler:
         """
         self.logger.info("Starting simulation")
         yamlmodel = json.loads(model)
-        # print(model)
-        self.streamsim_rpc_client.call(yamlmodel)
-        time.sleep(3)
+        self.streamsim_start_rpc_client.call(yamlmodel)
+
+    def reset_simulation(self):
+        """
+        Reset the simulation.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        self.logger.info("Resetting simulation")
+        self.streamsim_reset_rpc_client.call({})
+        time.sleep(2)
 
     def handle_goaldsl_message(self, message, topic):
         """
