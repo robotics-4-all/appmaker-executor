@@ -7,11 +7,33 @@ import sys
 import time
 import logging
 from dotenv import load_dotenv
+import multiprocessing
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 
 from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=import-error
+
+def start_executor(uid, feedback_topic, conn_params, message):
+    """
+    Initializes and starts the AppMakerExecutor with the provided parameters.
+
+    Args:
+        uid (str): Unique identifier for the executor instance.
+        feedback_topic (str): Topic for feedback communication.
+        conn_params (dict): Connection parameters for the executor.
+        message (str): Message containing the model to be loaded and executed.
+
+    Returns:
+        None
+    """
+    amexe = AppMakerExecutor( # pylint: disable=not-callable
+        uid=uid,
+        feedback_topic=feedback_topic,
+        conn_params=conn_params,
+    )
+    amexe.load_model(message)
+    amexe.execute()
 
 class AppMaker:
     """
@@ -37,13 +59,13 @@ class AppMaker:
         try:
             self.logger.info("Received model")
             self.logger.info("Feedback on: %s", message['feedbackTopic'])
-            self.amexe = AppMakerExecutor( # pylint: disable=not-callable
-                uid = self.uid,
-                feedback_topic = message['feedbackTopic'],
-                conn_params = self.conn_params,
+
+            process = multiprocessing.Process(
+                target=start_executor,
+                args=(self.uid, message['feedbackTopic'], self.conn_params, message)
             )
-            self.amexe.load_model(message)
-            self.amexe.execute()
+            process.start()
+            process.join()
             self.logger.info("All done")
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
