@@ -7,6 +7,7 @@ import time
 import logging
 import copy
 import json
+import pprint
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
@@ -50,12 +51,13 @@ class StorageHandler:
         stop():
             Stops the storage handler.
     """
-    def __init__(self, uid):
+    def __init__(self, uid, model):
         self.storage = {}
         self.subscribers = {}
         self.publishers = {}
         self.rpc_clients = {}
         self.publisher = None
+        self.model = model
         self.uid = uid
         self.logger = logging.getLogger(__name__)
 
@@ -88,7 +90,40 @@ class StorageHandler:
             rpc_name=f"goaldsl.{self.uid}.killall_sync",
         )
 
+        self.identify_subscribers_and_start_them()
+
         self.commlib_node.run()
+
+    def identify_subscribers_and_start_them(self):
+        """
+        Identify subscribers and start them.
+        """
+        self.logger.info("Identifying subscribers and starting them")
+        nodes_str = json.dumps(self.model['nodes'])
+        for toolbox in self.model['toolboxes']:
+            for node in toolbox['nodes']:
+                if 'action' in node and node['action']['type'] == "subscribe":
+                    topic = node['action']['topic']
+                    variable = node['action']['storage']
+                    if 'literalVariables' in node:
+                        for literal in node['literalVariables']:
+                            if literal in nodes_str:
+                                # The variable is used, start the subscriber
+                                # Dynamically create a callback in the class
+                                topic = topic.replace(".", "_")
+                                def callback(message):
+                                    self.set(variable, message)
+
+                                setattr(self, f"handle_{topic}_message", callback)
+                                self.start_subscriber(
+                                    node['action'],
+                                    None,
+                                    getattr(self, f"handle_{topic}_message"),
+                                    literal
+                                )
+
+                                break # In case other literals are used, sub has started
+        # exit(0)
 
     def start_simulation(self, model):
         """
@@ -168,7 +203,7 @@ class StorageHandler:
                 "value": message,
             })
 
-    def start_subscriber(self, action, broker, callback):
+    def start_subscriber(self, action, broker, callback, literal = None):
         """
         Starts a subscriber for a given action and broker.
 
@@ -204,7 +239,8 @@ class StorageHandler:
 
         self.subscribers[action['topic']] = {
             "subscriber": _subscriber,
-            "broker": broker
+            "broker": broker,
+            "literal": literal
         }
 
         _subscriber.run()
