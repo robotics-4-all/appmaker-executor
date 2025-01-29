@@ -520,8 +520,8 @@ class StorageHandler:
             expression = self.replace_variables(expression)
             return eval(expression) # pylint: disable=eval-used
         except Exception as e: # pylint: disable=broad-except
-            self.logger.error("- Error during evaluation: %s", e)
-            return None
+            self.logger.warning("- Value %s could not be evaluated. Probably a string: %s", expression, e)
+            return expression
 
     def replace_variables(self, expression):
         """
