@@ -111,14 +111,11 @@ class StorageHandler:
                                 # The variable is used, start the subscriber
                                 # Dynamically create a callback in the class
                                 topic = topic.replace(".", "_")
-                                def callback(message):
-                                    self.set(variable, message)
-
-                                setattr(self, f"handle_{topic}_message", callback)
+                                callback = lambda message, var=variable: self.set(var, message)
                                 self.start_subscriber(
                                     node['action'],
                                     None,
-                                    getattr(self, f"handle_{topic}_message"),
+                                    callback,
                                     literal
                                 )
 
@@ -231,7 +228,7 @@ class StorageHandler:
             self.logger.warning("Subscriber already exists for action: %s", action['topic'])
             return
 
-        self.logger.info("Creating subscriber for action: %s", action['topic'])
+        self.logger.critical("Creating subscriber for action: %s : %s", action['topic'], literal)
         _subscriber = self.commlib_node.create_subscriber(
             topic=action['topic'],
             on_message=callback
