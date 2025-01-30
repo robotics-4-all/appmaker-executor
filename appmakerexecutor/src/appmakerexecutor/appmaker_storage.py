@@ -56,6 +56,7 @@ class StorageHandler:
         self.subscribers = {}
         self.publishers = {}
         self.rpc_clients = {}
+        self.action_clients = {}
         self.publisher = None
         self.model = model
         self.uid = uid
@@ -359,6 +360,51 @@ class StorageHandler:
             timeout=120,
         )
         self.logger.info("RPC called with response: %s", response)
+        return response
+
+    def action_action_call(self, action, broker, parameters):
+        """
+        Handles the execution of an action call.
+
+        This method checks if an action client for the given action topic exists.
+        If not, it creates a new action client, runs it, and stores it in the action_clients dictionary.
+        It then prepares the payload by deep copying the initial payload and iterating through it to replace variables.
+        Finally, it sends the goal to the action client and waits for the result.
+
+        Args:
+            action (dict): A dictionary containing the action details, including the 'topic' and 'payload'.
+            broker (object): The broker object associated with the action.
+            parameters (dict): A dictionary of parameters to be used for replacing variables in the payload.
+
+        Returns:
+            object: The result of the action call.
+        """
+        if action['topic'] not in self.action_clients:
+            _action_call = self.commlib_node.create_action_client(
+                action_name=action['topic'],
+            )
+            _action_call.run()
+            self.logger.info("Creating Action client for action: %s", action['topic'])
+
+            self.action_clients[action['topic']] = {
+                "action": _action_call,
+                "broker": broker,
+                "initial_payload": action['payload']
+            }
+
+        self.logger.info("Action calling the action")
+        # Handle the the payload
+        payload = copy.deepcopy(self.action_clients[action['topic']]['initial_payload'])
+        self.logger.info("\tPayload: %s", payload)
+        # iterate through the payload and replace the variables
+        payload = self.iterate_payload(payload, parameters)
+        self.logger.info("\tIterated Payload: %s", payload)
+        # publish it
+        self.action_clients[action['topic']]['action'].send_goal(
+            payload,
+        )
+        self.logger.info("Action called")
+        response = self.action_clients[action['topic']]['action'].get_result(wait=True)
         return response
 
     def iterate_payload(self, payload, parameters):

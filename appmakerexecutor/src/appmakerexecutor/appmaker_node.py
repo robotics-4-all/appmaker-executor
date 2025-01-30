@@ -245,6 +245,29 @@ class AppMakerNode:
                     if self.action_variable:
                         self.storage_handler.set(self.action_variable, response)
 
+            elif action['type'] == "action":
+                for p in self.data['data']['parameters']:
+                    if p['id'] == 'broker':
+                        broker_id = p['value']
+                        break
+                # Get broker
+                correct_broker = None
+                for b in self.brokers:
+                    if b["id"] == broker_id:
+                        correct_broker = b
+                        break
+
+                response = self.storage_handler.action_action_call(
+                    action,
+                    correct_broker,
+                    self.data['data']['parameters'],
+                )
+
+                if 'storage' in action:
+                    self.action_variable = action['storage']
+                    if self.action_variable:
+                        self.storage_handler.set(self.action_variable, response)
+
         # articifial delay
         time.sleep(self.storage_handler.evaluate(self.artificial_delay))
 
