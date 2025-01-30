@@ -11,6 +11,7 @@ import multiprocessing
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
+from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
 
 from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=import-error
 
@@ -42,9 +43,12 @@ class AppMaker:
     def __init__(self, uid):
         self.uid = uid
         self.commlib_node = None
+        self.local_commlib_node = None
         self.amexe = None
         self.conn_params = None
         self.logger = logging.getLogger(__name__)
+        self.current_process = None
+        self.streamsim_reset_rpc_client = None
 
     def on_message(self, message):
         """
@@ -57,15 +61,42 @@ class AppMaker:
             None
         """
         try:
+            if self.current_process is not None and self.current_process.is_alive():
+                self.logger.warning("There is a process running, ignoring message")
+                return
+
             self.logger.info("Received model")
             self.logger.info("Feedback on: %s", message['feedbackTopic'])
 
-            process = multiprocessing.Process(
+            self.current_process = multiprocessing.Process(
                 target=start_executor,
                 args=(self.uid, message['feedbackTopic'], self.conn_params, message)
             )
-            process.start()
-            process.join()
+            self.current_process.start()
+            self.current_process.join()
+            self.current_process = None
+            self.logger.info("All done")
+        except Exception as e: # pylint: disable=broad-except
+            self.logger.error("Error on message: %s", e)
+
+    def on_message_stop(self, message): # pylint: disable=unused-argument
+        """
+        Handles the 'stop' message to terminate the current running process.
+
+        Args:
+            message: The message triggering the stop action. This argument is not used.
+
+        Logs:
+            - A warning if no process is currently running.
+            - An info message when the process is successfully terminated.
+            - An error message if an exception occurs during the termination process.
+        """
+        try:
+            if self.current_process is None:
+                self.logger.warning("No process running")
+                return
+            self.current_process.terminate()
+            self.streamsim_reset_rpc_client.call({}, timeout=3)
             self.logger.info("All done")
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
@@ -107,7 +138,25 @@ class AppMaker:
         )
         self.logger.warning("Subscribed to %s", f'appcreator.{self.uid}.deploy')
 
+        self.commlib_node.create_subscriber(
+            topic=f'appcreator.{self.uid}.stop',
+            on_message=self.on_message_stop
+        )
+        self.logger.warning("Subscribed to %s", f'appcreator.{self.uid}.stop')
+
         self.commlib_node.run()
+
+        # Local node
+        self.local_commlib_node = CommlibNode(node_name='locsys.app_executor_node_local',
+            connection_params=RedisConnectionParameters(),
+            heartbeats=False,
+            debug=True)
+
+        self.streamsim_reset_rpc_client = self.local_commlib_node.create_rpc_client(
+            rpc_name=f"streamsim.{self.uid}.reset",
+        )
+
+        self.local_commlib_node.run()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
