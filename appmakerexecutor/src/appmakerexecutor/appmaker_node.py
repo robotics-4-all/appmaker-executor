@@ -452,6 +452,7 @@ class AppMakerNode:
                 break
             next_node_index += 1
         print("Selected form condition: ", next_node_index)
+        print(">>> ", self.connection_list)
         return list(self.connections.keys())[next_node_index]
 
     def execute_random(self):

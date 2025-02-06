@@ -545,7 +545,7 @@ class StorageHandler:
                 else:
                     value = value[item]
                     # check if it is number, else put it on quotes
-                    if not isinstance(value, (int, float)):
+                    if not isinstance(value, (int, float, list, dict)):
                         value = f'"{value}"'
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error during evaluation: %s", e)
