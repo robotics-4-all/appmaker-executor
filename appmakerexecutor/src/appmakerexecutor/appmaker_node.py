@@ -47,6 +47,7 @@ class AppMakerNode:
             and connections.
     """
     def __init__(self, data, publisher=None, storage_handler=None, brokers = None):
+        print("\n\n", data)
         self.data = data
         self.publisher = publisher
         self.storage_handler = storage_handler
@@ -82,7 +83,7 @@ class AppMakerNode:
             None
         """
         self.connections[node.id] = connection
-        self.connection_list.append(connection['target'])
+        self.connection_list.append(connection)
 
     def publish(self, message):
         """
@@ -274,6 +275,21 @@ class AppMakerNode:
         self.publish("end")
         return next_node
 
+    def find_proper_output_index_in_connections(self, ind):
+        """
+        Finds the proper index in the connections list.
+
+        Args:
+            ind (int): The index to find.
+
+        Returns:
+            int: The index in the connections list.
+        """
+        for i, c in enumerate(self.connection_list):
+            if c['sourceHandle'] == f"out_{ind}":
+                return i
+        return -1
+
     def start_simulation(self):
         """
         Starts the simulation process.
@@ -452,8 +468,12 @@ class AppMakerNode:
                 break
             next_node_index += 1
         print("Selected form condition: ", next_node_index)
-        print(">>> ", self.connection_list)
-        return list(self.connections.keys())[next_node_index]
+        real_output = self.find_proper_output_index_in_connections(next_node_index)
+        if real_output == -1:
+            print("!!!!!! ----->>>> Error in selecting the next node")
+            return None
+        print("Real output = ", real_output)
+        return list(self.connections.keys())[real_output]
 
     def execute_random(self):
         """
@@ -474,10 +494,11 @@ class AppMakerNode:
         for i, prob in enumerate(probabilities):
             if random_prob < prob:
                 print("Selected: ", i)
-                return self.connection_list[i]
+                real_output = self.find_proper_output_index_in_connections(i)
+                return self.connection_list[real_output]['target']
             random_prob -= prob
         print("Something went wrong, returning the last connection")
-        return self.connection_list[-1]
+        return self.connection_list[-1]['target']
 
     def execute_thread_split(self):
         """
@@ -548,6 +569,7 @@ class AppMakerNode:
             str: The key of the first connection.
         """
         print("Executing node: ", self.id, " ", self.label)
+        print(list(self.connections.keys())[0])
         return list(self.connections.keys())[0]
 
     def print_node(self):

@@ -217,6 +217,7 @@ class AppMakerExecutor(CommlibNode):
 
         # Create the edges
         for e in edges:
+            print(e)
             self.nodes[e['source']].add_connection(self.nodes[e['target']], e)
 
         # Find Start nodes
