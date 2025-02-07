@@ -461,6 +461,8 @@ class AppMakerNode:
             result = False
             try:
                 result = self.storage_handler.evaluate(str(p['value']))
+                if isinstance(result, str):
+                    result = False
                 print("Result: ", result)
             except Exception as e: # pylint: disable=broad-except
                 print("Error in evaluating the condition: ", e)
