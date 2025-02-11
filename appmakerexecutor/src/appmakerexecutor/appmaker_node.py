@@ -142,7 +142,7 @@ class AppMakerNode:
             next_node = self.execute_preempt()
         elif self.label == "Delay":
             next_node = self.execute_delay()
-        elif self.label == "Create variable" or self.label == "Set variable":
+        elif self.label == "Create variable" or self.label == "Set variable" or self.label == "Create List":
             next_node = self.execute_set_variable()
         elif self.label == "Log":
             next_node = self.execute_log()

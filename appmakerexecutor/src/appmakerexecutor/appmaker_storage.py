@@ -540,8 +540,15 @@ class StorageHandler:
             self.logger.warning("Handling this variable: %s", expression)
             items = expression.split(".")
             for i, item in enumerate(items):
+                # Regex for array[integer] item
+                match = re.match(r"(.+)\[(\d+)\]", item)
                 if i == 0:
-                    value = self.get(item)
+                    if match:
+                        array_name, index = match.groups()
+                        index = int(index)
+                        value = self.get(array_name)[index]
+                    else:
+                        value = self.get(item)
                 else:
                     value = value[item]
                     # check if it is number, else put it on quotes
