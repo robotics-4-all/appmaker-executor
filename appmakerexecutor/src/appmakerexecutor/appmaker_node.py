@@ -144,6 +144,8 @@ class AppMakerNode:
             next_node = self.execute_delay()
         elif self.label == "Create variable" or self.label == "Set variable" or self.label == "Create List":
             next_node = self.execute_set_variable()
+        elif self.label == "List Operation" or self.label == "List Math Operation":
+            next_node = self.execute_list_operation()
         elif self.label == "Log":
             next_node = self.execute_log()
         elif self.label == "Start Simulation":
@@ -435,11 +437,50 @@ class AppMakerNode:
         """
         variable_name = self.parameters[0]['value']
         variable_value = self.parameters[1]['value']
+        if self.parameters[0]['id'] == "List" and self.parameters[1]['value'] == '':
+            variable_value = []
         evaluated = self.storage_handler.evaluate(variable_value)
         print("Setting variable: ", variable_name, " ", evaluated)
         self.storage_handler.set(variable_name, evaluated)
         return list(self.connections.keys())[0]
 
+    def execute_list_operation(self):
+        storedList = self.storage_handler.get(self.parameters[0]['value'])
+        
+        if self.parameters[1]['value'] == "Pop":
+            storedList.pop()
+            self.storage_handler.set(self.parameters[0]['value'], storedList)
+        elif self.parameters[1]['value'] == "Sort Ascending":
+            storedList.sort()
+            self.storage_handler.set(self.parameters[0]['value'], storedList)
+        elif self.parameters[1]['value'] == "Sort Descending":
+            storedList.sort(reverse=True)
+            self.storage_handler.set(self.parameters[0]['value'], storedList)
+        elif self.parameters[1]['value'] == "Push":
+            evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
+            storedList.append(evaluated)
+            self.storage_handler.set(self.parameters[0]['value'], storedList)
+        elif self.parameters[1]['value'] == "Average":
+            meanvalue = sum(storedList)/len(storedList)
+            variable_name = self.parameters[0]['value'] + "_average"
+            self.storage_handler.set(variable_name, meanvalue)
+        elif self.parameters[1]['value'] == "Max":
+            meanvalue = max(storedList)
+            variable_name = self.parameters[0]['value'] + "_max"
+            self.storage_handler.set(variable_name, meanvalue)
+        elif self.parameters[1]['value'] == "Min":
+            meanvalue = min(storedList)
+            variable_name = self.parameters[0]['value'] + "_min"
+            self.storage_handler.set(variable_name, meanvalue)
+        elif self.parameters[1]['value'] == "Standard Deviation":
+            meanvalue = sum(storedList) / len(storedList)            
+            variance = sum((x - meanvalue) ** 2 for x in storedList) / len(storedList)
+            stddev = variance ** 0.5
+            variable_name = self.parameters[0]['value'] + "_std"
+            self.storage_handler.set(variable_name, stddev)
+        
+        return list(self.connections.keys())[0]
+        
     def execute_condition(self):
         """
         Executes the condition of the node and returns the next node to be executed.
