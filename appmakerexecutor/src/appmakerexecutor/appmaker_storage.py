@@ -543,13 +543,17 @@ class StorageHandler:
                 # Regex for array[integer] item
                 match = re.match(r"(.+)\[(\d+)\]", item)
                 if i == 0:
-                    if match:
-                        array_name, index = match.groups()
-                        index = int(index)
-                        value = self.get(array_name)[index]
-                    else:
-                        value = self.get(item)
+                    # if match:
+                    #     array_name, index = match.groups()
+                    #     index = int(index)
+                    #     value = self.get(array_name)[index]
+                    # else:
+                    value = self.get(item)
                 else:
+                    try: 
+                        item = int(item)
+                    except: 
+                        pass
                     value = value[item]
                     # check if it is number, else put it on quotes
                     if not isinstance(value, (int, float, list, dict)):
