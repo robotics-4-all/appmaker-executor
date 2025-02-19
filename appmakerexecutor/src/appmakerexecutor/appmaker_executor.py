@@ -101,10 +101,14 @@ class AppMakerExecutor(CommlibNode):
             temp_neighbors = set([n])
             visited = set()
             all_visited = False
+            # import time
             while joins_found < splits_found and not all_visited:
+                # time.sleep(1)
                 all_visited = True
                 _neighs = temp_neighbors.copy()
                 for _n in temp_neighbors:
+                    if _n in visited:
+                        continue
                     visited.add(_n)
                     print("Current node: ", self.nodes[_n].count)
                     if self.nodes[_n].label == "Thread join":
@@ -131,6 +135,7 @@ class AppMakerExecutor(CommlibNode):
 
                 temp_neighbors = _neighs.copy()
                 # Check if all the neighbors were visited
+                print("Visited: ", visited)
                 for _n in temp_neighbors:
                     if _n not in visited:
                         all_visited = False
