@@ -95,6 +95,23 @@ class StorageHandler:
 
         self.commlib_node.run()
 
+    def fix_topic(self, topic):
+        """
+        Modifies the given topic by replacing the second segment with the instance's UID.
+        Args:
+            topic (str): The topic string to be modified. It is expected to be in the 
+            format 'segment1.segment2.segment3...'.
+
+        Returns:
+            str: The modified topic string with the second segment replaced by the 
+            instance's UID.
+        """
+        if "streamsim." in topic:
+            tt = topic.split(".")
+            tt[1] = self.uid
+            return ".".join(tt)
+        return topic
+
     def identify_subscribers_and_start_them(self):
         """
         Identify subscribers and start them.
@@ -104,6 +121,7 @@ class StorageHandler:
         for toolbox in self.model['toolboxes']:
             for node in toolbox['nodes']:
                 if 'action' in node and node['action']['type'] == "subscribe":
+                    node['action']['topic'] = self.fix_topic(node['action']['topic'])
                     topic = node['action']['topic']
                     variable = node['action']['storage']
                     if 'literalVariables' in node:
@@ -222,20 +240,21 @@ class StorageHandler:
             None
         """
         # Check if topic with the specific broker is already subscribed
-        if action['topic'] in self.subscribers and \
-            self.subscribers[action['topic']]['broker']['parameters']['host'] \
+        _topic = self.fix_topic(action['topic'])
+        if _topic in self.subscribers and \
+            self.subscribers[_topic]['broker']['parameters']['host'] \
                 == broker['parameters']['host']:
 
-            self.logger.warning("Subscriber already exists for action: %s", action['topic'])
+            self.logger.warning("Subscriber already exists for action: %s", _topic)
             return
 
-        self.logger.critical("Creating subscriber for action: %s : %s", action['topic'], literal)
+        self.logger.critical("Creating subscriber for action: %s : %s", _topic, literal)
         _subscriber = self.commlib_node.create_subscriber(
-            topic=action['topic'],
+            topic=_topic,
             on_message=callback
         )
 
-        self.subscribers[action['topic']] = {
+        self.subscribers[_topic] = {
             "subscriber": _subscriber,
             "broker": broker,
             "literal": literal
@@ -257,15 +276,16 @@ class StorageHandler:
             Info: Logs a message indicating that the subscriber was stopped for the given action.
             Error: Logs an error message if no active subscriber is found for the given action.
         """
-        if action['topic'] in self.subscribers and \
-            self.subscribers[action['topic']]['broker']['parameters']['host'] \
+        _topic = self.fix_topic(action['topic'])
+        if _topic in self.subscribers and \
+            self.subscribers[_topic]['broker']['parameters']['host'] \
                 == broker['parameters']['host']:
 
-            self.subscribers[action['topic']]['subscriber'].stop()
-            del self.subscribers[action['topic']]
-            self.logger.info("Subscriber stopped for action: %s", action['topic'])
+            self.subscribers[_topic]['subscriber'].stop()
+            del self.subscribers[_topic]
+            self.logger.info("Subscriber stopped for action: %s", _topic)
         else:
-            self.logger.error("Active subscriber not found for action: %s", action['topic'])
+            self.logger.error("Active subscriber not found for action: %s", _topic)
 
     def action_publish(self, action, broker, parameters):
         """
@@ -284,16 +304,17 @@ class StorageHandler:
         Returns:
             None
         """
-        if action['topic'] not in self.publishers:
+        _topic = self.fix_topic(action['topic'])
+        if _topic not in self.publishers:
             # Add it
-            self.logger.info("Creating publisher for action: %s", action['topic'])
-
+            self.logger.info("Creating publisher for action: %s", _topic)
+            _topic = self.fix_topic(_topic)
             _publisher = self.commlib_node.create_publisher(
-                topic=action['topic']
+                topic=_topic
             )
             _publisher.run()
 
-            self.publishers[action['topic']] = {
+            self.publishers[_topic] = {
                 "publisher": _publisher,
                 "broker": broker,
                 "initial_payload": action['payload']
@@ -301,13 +322,13 @@ class StorageHandler:
 
         self.logger.info("Publishing the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.publishers[action['topic']]['initial_payload'])
+        payload = copy.deepcopy(self.publishers[_topic]['initial_payload'])
         self.logger.info("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.info("\tIterated Payload: %s", payload)
         # publish it
-        self.publishers[action['topic']]['publisher'].publish(payload)
+        self.publishers[_topic]['publisher'].publish(payload)
 
     def action_rpc_call(self, action, broker, parameters):
         """
@@ -334,14 +355,15 @@ class StorageHandler:
             - The iterated payload after replacing variables.
             - The response from the RPC call.
         """
-        if action['topic'] not in self.rpc_clients:
+        _topic = self.fix_topic(action['topic'])
+        if _topic not in self.rpc_clients:
             _rpc_call = self.commlib_node.create_rpc_client(
-                rpc_name=action['topic'],
+                rpc_name=_topic,
             )
             _rpc_call.run()
-            self.logger.info("Creating RPC client for action: %s", action['topic'])
+            self.logger.info("Creating RPC client for action: %s", _topic)
 
-            self.rpc_clients[action['topic']] = {
+            self.rpc_clients[_topic] = {
                 "rpc": _rpc_call,
                 "broker": broker,
                 "initial_payload": action['payload']
@@ -349,13 +371,13 @@ class StorageHandler:
 
         self.logger.info("RPC calling the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.rpc_clients[action['topic']]['initial_payload'])
+        payload = copy.deepcopy(self.rpc_clients[_topic]['initial_payload'])
         self.logger.info("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.info("\tIterated Payload: %s", payload)
         # publish it
-        response = self.rpc_clients[action['topic']]['rpc'].call(
+        response = self.rpc_clients[_topic]['rpc'].call(
             payload,
             timeout=120,
         )
@@ -379,14 +401,15 @@ class StorageHandler:
         Returns:
             object: The result of the action call.
         """
-        if action['topic'] not in self.action_clients:
+        _topic = self.fix_topic(action['topic'])
+        if _topic not in self.action_clients:
             _action_call = self.commlib_node.create_action_client(
-                action_name=action['topic'],
+                action_name=_topic,
             )
             _action_call.run()
-            self.logger.info("Creating Action client for action: %s", action['topic'])
+            self.logger.info("Creating Action client for action: %s", _topic)
 
-            self.action_clients[action['topic']] = {
+            self.action_clients[_topic] = {
                 "action": _action_call,
                 "broker": broker,
                 "initial_payload": action['payload']
@@ -394,17 +417,17 @@ class StorageHandler:
 
         self.logger.info("Action calling the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.action_clients[action['topic']]['initial_payload'])
+        payload = copy.deepcopy(self.action_clients[_topic]['initial_payload'])
         self.logger.info("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.info("\tIterated Payload: %s", payload)
         # publish it
-        self.action_clients[action['topic']]['action'].send_goal(
-            payload,
+        self.action_clients[_topic]['action'].send_goal(
+            payload
         )
         self.logger.info("Action called")
-        response = self.action_clients[action['topic']]['action'].get_result(wait=True)
+        response = self.action_clients[_topic]['action'].get_result(wait=True)
         return response
 
     def iterate_payload(self, payload, parameters):
