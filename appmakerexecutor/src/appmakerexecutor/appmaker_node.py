@@ -634,7 +634,10 @@ class AppMakerNode:
         print("Delay parameter: ", self.parameters[0]['value'])
         delay = self.storage_handler.evaluate(self.parameters[0]['value'])
         print("Delay: ", delay)
-        time.sleep(float(delay))
+        tt = 0
+        while tt < float(delay) and not self.is_preempted:
+            time.sleep(0.1)
+            tt += 0.1
         return list(self.connections.keys())[0]
 
     def execute_general(self):
