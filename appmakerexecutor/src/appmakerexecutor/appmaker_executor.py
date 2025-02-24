@@ -170,7 +170,7 @@ class AppMakerExecutor(CommlibNode):
             # Find the corresponding thread join node
             thread_join_id = self.find_corresponding_thread_join(node_id)
             print("The corresponding thread join is: ", self.nodes[thread_join_id].count)
-            self.nodes[node_id].nextJoin = thread_join_id
+            self.nodes[node_id].next_join = thread_join_id
             # Add the node to the executor
             self.node_executors[executor_id].add_node(self.nodes[thread_join_id])
             print("Thread join added to executor: ", executor_id)
