@@ -92,12 +92,18 @@ class AppMaker:
             - An error message if an exception occurs during the termination process.
         """
         try:
+            self.logger.critical("Received stop message")
             if self.current_process is None:
                 self.logger.warning("No process running")
                 return
+            self.logger.critical("Terminating process")
             self.current_process.terminate()
+            self.current_process.join()
+            self.current_process = None
+            self.logger.critical("Process terminated")
+            self.logger.critical("Stopping stream simulator")
             self.streamsim_reset_rpc_client.call({}, timeout=3)
-            self.logger.info("All done")
+            self.logger.critical("Stream simulator stopped")
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
