@@ -547,6 +547,8 @@ class AppMakerNode:
                 break
             next_node_index += 1
         print("Selected form condition: ", next_node_index)
+        if next_node_index >= len(self.connection_list):
+            next_node_index = len(self.connection_list) - 1 # The else condition
         real_output = self.find_proper_output_index_in_connections(next_node_index)
         if real_output == -1:
             print("!!!!!! ----->>>> Error in selecting the next node")
