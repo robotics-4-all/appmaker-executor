@@ -92,7 +92,7 @@ class AppMaker:
             - An error message if an exception occurs during the termination process.
         """
         try:
-            self.logger.critical("Received stop message")
+            self.logger.critical(f"Received stop message: {message}")
             if self.current_process is None:
                 self.logger.warning("No process running")
                 return
@@ -157,6 +157,11 @@ class AppMaker:
             connection_params=RedisConnectionParameters(),
             heartbeats=False,
             debug=True)
+
+        self.local_commlib_node.create_subscriber(
+            topic=f'appcreator.local.stop',
+            on_message=self.on_message_stop
+        )
 
         self.streamsim_reset_rpc_client = self.local_commlib_node.create_rpc_client(
             rpc_name=f"streamsim.{self.uid}.reset",

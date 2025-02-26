@@ -48,6 +48,7 @@ class AppMakerExecutor(CommlibNode):
         self.node_executors = {}
         self.nodes_assigned_to_executors = {}
         self.publisher = None
+        self.stop_publisher = None
         self.feedback_topic = None
         self.uid = None
         self.conn_params = None
@@ -76,6 +77,11 @@ class AppMakerExecutor(CommlibNode):
         self.publisher = self.create_publisher(
             topic=self.feedback_topic,
         )
+        
+        self.stop_publisher = self.create_publisher(
+            topic=f'appcreator.local.stop',
+        )
+    
         self.run()
 
     def find_corresponding_thread_join(self, thread_split_id):
@@ -217,7 +223,7 @@ class AppMakerExecutor(CommlibNode):
 
         # Create the nodes
         for n in nodes:
-            n = AppMakerNode(n, self.publisher, self.storage, brokers)
+            n = AppMakerNode(n, self.publisher, self.storage, brokers, self.stop_publisher)
             self.nodes[n.id] = n
 
         # Create the edges

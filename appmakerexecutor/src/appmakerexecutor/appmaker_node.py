@@ -46,7 +46,7 @@ class AppMakerNode:
             Prints information about the node, including its ID, label, count, parameters, 
             and connections.
     """
-    def __init__(self, data, publisher=None, storage_handler=None, brokers = None):
+    def __init__(self, data, publisher=None, storage_handler=None, brokers = None, stop_publisher=None):
         print("\n\n", data)
         self.data = data
         self.publisher = publisher
@@ -68,6 +68,7 @@ class AppMakerNode:
         # In case of preempt, we need to keep the executor to kill
         self.executor_to_preempt = None
         self.artificial_delay = 0
+        self.stop_publisher = stop_publisher
 
         # pprint.pprint(data)
 
@@ -97,6 +98,23 @@ class AppMakerNode:
         """
         if self.publisher is not None:
             self.publisher.publish({
+                "node_id": self.id,
+                "message": message,
+                "label": self.label,
+            })
+    
+    def publish_stop(self, message):
+        """
+        Publishes a message using the publisher associated with this node.
+
+        Args:
+            message (str): The message to be published.
+
+        Returns:
+            None
+        """
+        if self.stop_publisher is not None:
+            self.stop_publisher.publish({
                 "node_id": self.id,
                 "message": message,
                 "label": self.label,
@@ -445,77 +463,89 @@ class AppMakerNode:
         return list(self.connections.keys())[0]
 
     def execute_list_operation(self):
-        storedList = self.storage_handler.get(self.parameters[0]['value'])
+        try:
+            storedList = self.storage_handler.get(self.parameters[0]['value'])
+            
+            if self.parameters[1]['value'] == "Pop":
+                storedList.pop()
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[1]['value'] == "Sort Ascending":
+                storedList.sort()
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[1]['value'] == "Sort Descending":
+                storedList.sort(reverse=True)
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[1]['value'] == "Push":
+                evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
+                storedList.append(evaluated)
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[1]['value'] == "Delete by index":
+                evaluatedIndex = self.storage_handler.evaluate(self.parameters[3]['value'])
+                storedList.pop(evaluatedIndex)
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[1]['value'] == "Delete All":
+                evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
+                storedList.clear()
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[1]['value'] == "Delete by value":
+                evaluatedIndex = self.storage_handler.evaluate(self.parameters[4]['value'])
+                storedList.remove(evaluatedIndex)
+                self.storage_handler.set(self.parameters[0]['value'], storedList)
+            elif self.parameters[2]['value'] == "Average":
+                meanvalue = sum(storedList)/len(storedList)
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, meanvalue)
+            elif self.parameters[2]['value'] == "Max":
+                maxvalue = max(storedList)
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, maxvalue)
+            elif self.parameters[2]['value'] == "Min":
+                minvalue = min(storedList)
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, minvalue)
+            elif self.parameters[2]['value'] == "Standard Deviation":
+                meanvalue = sum(storedList) / len(storedList)            
+                variance = sum((x - meanvalue) ** 2 for x in storedList) / len(storedList)
+                stddev = variance ** 0.5
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, stddev)
+            elif self.parameters[2]['value'] == "Length":
+                lenvalue = len(storedList)
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, lenvalue)  
+            elif self.parameters[2]['value'] == "Includes":
+                valuetosearch = self.storage_handler.evaluate(self.parameters[3]['value'])
+                searchresult = valuetosearch in storedList
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, searchresult)
+            elif self.parameters[2]['value'] == "Element count":
+                valuetosearch = self.storage_handler.evaluate(self.parameters[4]['value'])
+                searchresult = storedList.count(valuetosearch)
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, searchresult)
+            elif self.parameters[2]['value'] == "Get element by index":
+                evaluatedIndex = self.storage_handler.evaluate(self.parameters[5]['value'])
+                searchresult = storedList[evaluatedIndex]
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, searchresult)
+            elif self.parameters[2]['value'] == "Get index of element":
+                valuetosearch = self.storage_handler.evaluate(self.parameters[6]['value'])
+                searchresult = storedList.index(valuetosearch)
+                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(variable_name, searchresult)
+            return list(self.connections.keys())[0]
         
-        if self.parameters[1]['value'] == "Pop":
-            storedList.pop()
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[1]['value'] == "Sort Ascending":
-            storedList.sort()
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[1]['value'] == "Sort Descending":
-            storedList.sort(reverse=True)
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[1]['value'] == "Push":
-            evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
-            storedList.append(evaluated)
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[1]['value'] == "Delete by index":
-            evaluatedIndex = self.storage_handler.evaluate(self.parameters[3]['value'])
-            storedList.pop(evaluatedIndex)
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[1]['value'] == "Delete All":
-            evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
-            storedList.clear()
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[1]['value'] == "Delete by value":
-            evaluatedIndex = self.storage_handler.evaluate(self.parameters[4]['value'])
-            storedList.remove(evaluatedIndex)
-            self.storage_handler.set(self.parameters[0]['value'], storedList)
-        elif self.parameters[2]['value'] == "Average":
-            meanvalue = sum(storedList)/len(storedList)
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, meanvalue)
-        elif self.parameters[2]['value'] == "Max":
-            maxvalue = max(storedList)
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, maxvalue)
-        elif self.parameters[2]['value'] == "Min":
-            minvalue = min(storedList)
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, minvalue)
-        elif self.parameters[2]['value'] == "Standard Deviation":
-            meanvalue = sum(storedList) / len(storedList)            
-            variance = sum((x - meanvalue) ** 2 for x in storedList) / len(storedList)
-            stddev = variance ** 0.5
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, stddev)
-        elif self.parameters[2]['value'] == "Length":
-            lenvalue = len(storedList)
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, lenvalue)  
-        elif self.parameters[2]['value'] == "Includes":
-            valuetosearch = self.storage_handler.evaluate(self.parameters[3]['value'])
-            searchresult = valuetosearch in storedList
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, searchresult)
-        elif self.parameters[2]['value'] == "Element count":
-            valuetosearch = self.storage_handler.evaluate(self.parameters[4]['value'])
-            searchresult = storedList.count(valuetosearch)
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, searchresult)
-        elif self.parameters[2]['value'] == "Get element by index":
-            evaluatedIndex = self.storage_handler.evaluate(self.parameters[5]['value'])
-            searchresult = storedList[evaluatedIndex]
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, searchresult)
-        elif self.parameters[2]['value'] == "Get index of element":
-            valuetosearch = self.storage_handler.evaluate(self.parameters[6]['value'])
-            searchresult = storedList.index(valuetosearch)
-            variable_name = self.parameters[1]['value']
-            self.storage_handler.set(variable_name, searchresult)
-        
-        return list(self.connections.keys())[0]
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            self.publish({
+                "message": f"runtime_error: {e}",
+                "node_count": self.count,
+                "timestamp": timestamp,
+                })
+            time.sleep(.05)
+            self.publish_stop(f"An error occurred: {e}")
+            return None 
         
     def execute_condition(self):
         """
