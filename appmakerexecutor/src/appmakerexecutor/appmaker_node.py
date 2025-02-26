@@ -547,6 +547,7 @@ class AppMakerNode:
                 "node_count": self.count,
                 "timestamp": timestamp,
             })
+            self.publish("end") # Inform the UI that the executor has finished
             print("Published to UI")
             time.sleep(1)
             self.publish_stop(f"An error occurred: {e}")
