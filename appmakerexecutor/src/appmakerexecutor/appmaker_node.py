@@ -96,13 +96,14 @@ class AppMakerNode:
         Returns:
             None
         """
+        print("Publishing message to UI", message)
         if self.publisher is not None:
             self.publisher.publish({
                 "node_id": self.id,
                 "message": message,
                 "label": self.label,
             })
-    
+
     def publish_stop(self, message):
         """
         Publishes a message using the publisher associated with this node.
@@ -113,6 +114,7 @@ class AppMakerNode:
         Returns:
             None
         """
+        print("!! Publishing stop message")
         if self.stop_publisher is not None:
             self.stop_publisher.publish({
                 "node_id": self.id,
@@ -292,6 +294,7 @@ class AppMakerNode:
         # articifial delay
         time.sleep(self.storage_handler.evaluate(self.artificial_delay))
 
+        print("Next node is ", next_node)
         self.publish("end")
         return next_node
 
@@ -542,11 +545,14 @@ class AppMakerNode:
                 "message": f"runtime_error: {e}",
                 "node_count": self.count,
                 "timestamp": timestamp,
-                })
-            time.sleep(.05)
+            })
+            print("Published to UI")
+            time.sleep(1)
             self.publish_stop(f"An error occurred: {e}")
-            return None 
-        
+            print("Internal publish")
+            time.sleep(1)
+            return None
+
     def execute_condition(self):
         """
         Executes the condition of the node and returns the next node to be executed.

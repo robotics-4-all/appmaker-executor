@@ -18,6 +18,7 @@ Example usage:
 
 import time
 from commlib.node import Node as CommlibNode
+from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
 
 from appmaker_node import AppMakerNode # type: ignore # pylint: disable=import-error
 from appmaker_node_executor import NodeExecutor # type: ignore # pylint: disable=import-error
@@ -77,12 +78,20 @@ class AppMakerExecutor(CommlibNode):
         self.publisher = self.create_publisher(
             topic=self.feedback_topic,
         )
-        
-        self.stop_publisher = self.create_publisher(
-            topic=f'appcreator.local.stop',
-        )
-    
+
         self.run()
+
+        # Local interfaces
+        self.local_commlib_node = CommlibNode(node_name='sslocsys.app_executor_node_local',
+            connection_params=RedisConnectionParameters(),
+            heartbeats=False,
+            debug=True)
+
+        self.stop_publisher = self.local_commlib_node.create_publisher(
+            topic='appcreator.local.stop',
+        )
+
+        self.local_commlib_node.run()
 
     def find_corresponding_thread_join(self, thread_split_id):
         """

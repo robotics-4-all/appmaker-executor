@@ -6,8 +6,8 @@ import os
 import sys
 import time
 import logging
-from dotenv import load_dotenv
 import multiprocessing
+from dotenv import load_dotenv
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
@@ -92,7 +92,7 @@ class AppMaker:
             - An error message if an exception occurs during the termination process.
         """
         try:
-            self.logger.critical(f"Received stop message: {message}")
+            self.logger.critical("Received stop message: %s", message)
             if self.current_process is None:
                 self.logger.warning("No process running")
                 return
@@ -125,6 +125,7 @@ class AppMaker:
             print("Error: ", e)
             exit(1)
 
+        # -------- MQTT interfaces --------
         self.conn_params = MQTTConnectionParameters(
             host=broker_host,
             port=broker_port,
@@ -152,14 +153,14 @@ class AppMaker:
 
         self.commlib_node.run()
 
-        # Local node
+        # ---------- Redis interfaces ----------
         self.local_commlib_node = CommlibNode(node_name='locsys.app_executor_node_local',
             connection_params=RedisConnectionParameters(),
             heartbeats=False,
             debug=True)
 
         self.local_commlib_node.create_subscriber(
-            topic=f'appcreator.local.stop',
+            topic='appcreator.local.stop',
             on_message=self.on_message_stop
         )
 
