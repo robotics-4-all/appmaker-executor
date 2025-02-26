@@ -102,6 +102,7 @@ class AppMakerNode:
                 "node_id": self.id,
                 "message": message,
                 "label": self.label,
+                "timestamp": time.time(),
             })
 
     def publish_stop(self, message):

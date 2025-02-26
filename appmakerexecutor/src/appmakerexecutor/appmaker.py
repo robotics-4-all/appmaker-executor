@@ -134,9 +134,9 @@ class AppMaker:
             password=broker_password,
         )
 
-        self.commlib_node = CommlibNode(node_name='locsys.app_executor_node',
+        self.commlib_node = CommlibNode(node_name=f'locsys.app_executor_node.{self.uid}',
             connection_params=self.conn_params,
-            heartbeats=False,
+            heartbeats=True,
             debug=True)
 
         self.commlib_node.create_subscriber(
