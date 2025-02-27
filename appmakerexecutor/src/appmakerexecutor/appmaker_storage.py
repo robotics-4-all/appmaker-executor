@@ -427,7 +427,7 @@ class StorageHandler:
             payload
         )
         self.logger.info("Action called")
-        response = self.action_clients[_topic]['action'].get_result(wait=True)
+        response = self.action_clients[_topic]['action'].get_result(wait=True, timeout=120, wait_max_sec=120)
         return response
 
     def iterate_payload(self, payload, parameters):
