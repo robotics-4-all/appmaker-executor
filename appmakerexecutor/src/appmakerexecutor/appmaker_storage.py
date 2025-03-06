@@ -60,6 +60,7 @@ class StorageHandler:
         self.publisher = None
         self.model = model
         self.uid = uid
+        self.goaldsl_id = None
         self.logger = logging.getLogger(__name__)
 
         self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
@@ -93,6 +94,10 @@ class StorageHandler:
 
         self.variables_publisher = self.commlib_node.create_publisher(
             topic="appcreator.variables"
+        )
+
+        self.scores_publisher = self.commlib_node.create_publisher(
+            topic="appcreator.scores.internal"
         )
 
         self.identify_subscribers_and_start_them()
@@ -224,6 +229,12 @@ class StorageHandler:
                     "message": score,
                     "label": "Score",
                     "timestamp": time.time(),
+                })
+
+                self.scores_publisher.publish({
+                    "user_id": self.uid,
+                    "goaldsl_id": self.goaldsl_id,
+                    "update": message
                 })
 
     def start_subscriber(self, action, broker, callback, literal = None):

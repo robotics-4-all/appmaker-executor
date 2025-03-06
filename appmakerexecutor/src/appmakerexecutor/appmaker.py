@@ -6,6 +6,8 @@ import os
 import sys
 import time
 import logging
+import string
+import random
 import multiprocessing
 from dotenv import load_dotenv
 
@@ -49,6 +51,8 @@ class AppMaker:
         self.logger = logging.getLogger(__name__)
         self.current_process = None
         self.streamsim_reset_rpc_client = None
+        self.scores_publisher = None
+        self.execution_uid = None
 
     def on_message(self, message):
         """
@@ -61,6 +65,8 @@ class AppMaker:
             None
         """
         try:
+            self.execution_uid = \
+                ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
             if self.current_process is not None and self.current_process.is_alive():
                 self.logger.warning("There is a process running, ignoring message")
                 return
@@ -78,6 +84,16 @@ class AppMaker:
             self.logger.info("All done")
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
+
+    def on_internal_score(self, message):
+        """
+        Handles the internal score message and publishes it.
+
+        Args:
+            message (Any): The message containing the score information to be published.
+        """
+        message['execution_uid'] = self.execution_uid
+        self.scores_publisher.publish(message)
 
     def on_message_stop(self, message): # pylint: disable=unused-argument
         """
@@ -151,6 +167,10 @@ class AppMaker:
         )
         self.logger.warning("Subscribed to %s", f'appcreator.{self.uid}.stop')
 
+        self.scores_publisher = self.commlib_node.create_publisher(
+            topic='appcreator.scores',
+        )
+
         self.commlib_node.run()
 
         # ---------- Redis interfaces ----------
@@ -166,6 +186,11 @@ class AppMaker:
 
         self.streamsim_reset_rpc_client = self.local_commlib_node.create_rpc_client(
             rpc_name=f"streamsim.{self.uid}.reset",
+        )
+
+        self.local_commlib_node.create_subscriber(
+            topic='appcreator.scores.internal',
+            on_message=self.on_internal_score
         )
 
         self.local_commlib_node.run()

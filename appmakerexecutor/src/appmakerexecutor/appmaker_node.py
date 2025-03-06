@@ -420,11 +420,13 @@ class AppMakerNode:
 
         print("Starting goaldsl model")
         model = self.parameters[0]['value']
+        model_id = self.parameters[0]['model_id']
+        self.storage_handler.goaldsl_id = model_id
         # Start the new one
         self.storage_handler.deploy_goaldsl(model)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
-            "message": "Goaldsl started", 
+            "message": "Goaldsl started",
             "timestamp": timestamp,
             "node_count": self.count,
         })
