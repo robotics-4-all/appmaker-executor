@@ -138,6 +138,34 @@ class AppMakerNode:
         if self.action_variable:
             self.storage_handler.set(self.action_variable, message)
 
+    def handle_runtime_error(self, e):
+        """
+        Handles runtime errors by publishing error details and stopping the executor.
+
+        Args:
+            e (Exception): The exception that occurred.
+
+        Actions:
+            - Prints the error message.
+            - Publishes a message with the error details, node count, and timestamp.
+            - Informs the UI that the executor has finished.
+            - Waits for a short period before publishing a stop message with the error details.
+            - Prints internal publish status.
+        """
+        print(f"An error occurred: {e}")
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        self.publish({
+            "message": f"runtime_error: {e}",
+            "node_count": self.count,
+            "timestamp": timestamp,
+        })
+        self.publish("end") # Inform the UI that the executor has finished
+        print("Published to UI")
+        time.sleep(1)
+        self.publish_stop(f"An error occurred: {e}")
+        print("Internal publish")
+        time.sleep(1)
+
     def execute(self):
         """
         Executes the logic of the current node and returns the next node to be executed.
@@ -154,7 +182,11 @@ class AppMakerNode:
         if self.label == "Condition":
             next_node = self.execute_condition()
         elif self.label == "Random selection":
-            next_node = self.execute_random()
+            next_node = self.execute_random_selection()
+        elif self.label == "Random number":
+            next_node = self.execute_random_number()
+        elif self.label == "Random integer":
+            next_node = self.execute_random_integer()
         elif self.label == "End":
             time.sleep(1) # Delay to catch the websocket messages in Locsys
             next_node = None
@@ -467,93 +499,144 @@ class AppMakerNode:
         self.storage_handler.set(variable_name, evaluated)
         return list(self.connections.keys())[0]
 
-    def execute_list_operation(self):
+    def execute_random_number(self):
+        """
+        Executes the generation of a random number within a specified range and stores it in 
+        a variable.
+
+        This method retrieves the variable name, minimum value, and maximum value from the 
+        parameters, generates a random floating-point number within the specified range, stores 
+        the generated number in the storage handler under the given variable name, and returns 
+        the first key from the connections.
+
+        Returns:
+            The first key from the connections dictionary.
+        """
         try:
-            storedList = self.storage_handler.get(self.parameters[0]['value'])
+            variable_name = self.parameters[0]['value']
+            minimum = float(self.parameters[1]['value'])
+            maximum = float(self.parameters[2]['value'])
+            evaluated = random.uniform(minimum, maximum)
+            print("Setting variable: ", variable_name, " ", evaluated)
+            self.storage_handler.set(variable_name, evaluated)
+            return list(self.connections.keys())[0]
+        except Exception as e: # pylint: disable=broad-except
+            self.handle_runtime_error(e)
+            return None
+
+    def execute_random_integer(self):
+        """
+        Executes the generation of a random integer within a specified range and stores it.
+
+        This method retrieves the variable name and the minimum and maximum values from the 
+        parameters, generates a random integer within the specified range, and stores it using 
+        the storage handler.
+        It also prints the variable name and the generated integer.
+
+        Returns:
+            The key of the first connection in the connections dictionary.
+
+        Raises:
+            ValueError: If the parameters for minimum or maximum values are not valid integers.
+        """
+        try:
+            variable_name = self.parameters[0]['value']
+            minimum = int(self.parameters[1]['value'])
+            maximum = int(self.parameters[2]['value'])
+            evaluated = random.randint(minimum, maximum)
+            print("Setting variable: ", variable_name, " ", evaluated)
+            self.storage_handler.set(variable_name, evaluated)
+            return list(self.connections.keys())[0]
+        except Exception as e: # pylint: disable=broad-except
+            self.handle_runtime_error(e)
+            return None
+
+    def execute_list_operation(self):
+        """
+        Executes various list operations based on the parameters provided.
+        The operation to be performed is determined by the value of `self.parameters[1]['value']` 
+        and `self.parameters[2]['value']`.
+        The list to be operated on is retrieved from `self.storage_handler` using the key
+        `self.parameters[0]['value']`.
+        Returns:
+            The key of the next node to be executed, or None if an error occurs.
+        Raises:
+            Exception: If any error occurs during the execution of the list operation.
+        """
+        try:
+            stored_list = self.storage_handler.get(self.parameters[0]['value'])
             
             if self.parameters[1]['value'] == "Pop":
-                storedList.pop()
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                stored_list.pop()
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[1]['value'] == "Sort Ascending":
-                storedList.sort()
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                stored_list.sort()
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[1]['value'] == "Sort Descending":
-                storedList.sort(reverse=True)
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                stored_list.sort(reverse=True)
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[1]['value'] == "Push":
                 evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
-                storedList.append(evaluated)
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                stored_list.append(evaluated)
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[1]['value'] == "Delete by index":
-                evaluatedIndex = self.storage_handler.evaluate(self.parameters[3]['value'])
-                storedList.pop(evaluatedIndex)
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                evaluated_index = self.storage_handler.evaluate(self.parameters[3]['value'])
+                stored_list.pop(evaluated_index)
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[1]['value'] == "Delete All":
                 evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
-                storedList.clear()
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                stored_list.clear()
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[1]['value'] == "Delete by value":
-                evaluatedIndex = self.storage_handler.evaluate(self.parameters[4]['value'])
-                storedList.remove(evaluatedIndex)
-                self.storage_handler.set(self.parameters[0]['value'], storedList)
+                evaluated_index = self.storage_handler.evaluate(self.parameters[4]['value'])
+                stored_list.remove(evaluated_index)
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[2]['value'] == "Average":
-                meanvalue = sum(storedList)/len(storedList)
+                meanvalue = sum(stored_list)/len(stored_list)
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, meanvalue)
             elif self.parameters[2]['value'] == "Max":
-                maxvalue = max(storedList)
+                maxvalue = max(stored_list)
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, maxvalue)
             elif self.parameters[2]['value'] == "Min":
-                minvalue = min(storedList)
+                minvalue = min(stored_list)
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, minvalue)
             elif self.parameters[2]['value'] == "Standard Deviation":
-                meanvalue = sum(storedList) / len(storedList)            
-                variance = sum((x - meanvalue) ** 2 for x in storedList) / len(storedList)
+                meanvalue = sum(stored_list) / len(stored_list)            
+                variance = sum((x - meanvalue) ** 2 for x in stored_list) / len(stored_list)
                 stddev = variance ** 0.5
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, stddev)
             elif self.parameters[2]['value'] == "Length":
-                lenvalue = len(storedList)
+                lenvalue = len(stored_list)
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, lenvalue)  
             elif self.parameters[2]['value'] == "Includes":
                 valuetosearch = self.storage_handler.evaluate(self.parameters[3]['value'])
-                searchresult = valuetosearch in storedList
+                searchresult = valuetosearch in stored_list
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, searchresult)
             elif self.parameters[2]['value'] == "Element count":
                 valuetosearch = self.storage_handler.evaluate(self.parameters[4]['value'])
-                searchresult = storedList.count(valuetosearch)
+                searchresult = stored_list.count(valuetosearch)
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, searchresult)
             elif self.parameters[2]['value'] == "Get element by index":
-                evaluatedIndex = self.storage_handler.evaluate(self.parameters[5]['value'])
-                searchresult = storedList[evaluatedIndex]
+                evaluated_index = self.storage_handler.evaluate(self.parameters[5]['value'])
+                searchresult = stored_list[evaluated_index]
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, searchresult)
             elif self.parameters[2]['value'] == "Get index of element":
                 valuetosearch = self.storage_handler.evaluate(self.parameters[6]['value'])
-                searchresult = storedList.index(valuetosearch)
+                searchresult = stored_list.index(valuetosearch)
                 variable_name = self.parameters[1]['value']
                 self.storage_handler.set(variable_name, searchresult)
             return list(self.connections.keys())[0]
         
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            timestamp = time.strftime("%H:%M:%S", time.localtime())
-            self.publish({
-                "message": f"runtime_error: {e}",
-                "node_count": self.count,
-                "timestamp": timestamp,
-            })
-            self.publish("end") # Inform the UI that the executor has finished
-            print("Published to UI")
-            time.sleep(1)
-            self.publish_stop(f"An error occurred: {e}")
-            print("Internal publish")
-            time.sleep(1)
+        except Exception as e: # pylint: disable=broad-except
+            self.handle_runtime_error(e)
             return None
 
     def execute_condition(self):
@@ -595,7 +678,7 @@ class AppMakerNode:
         print("Real output = ", real_output)
         return list(self.connections.keys())[real_output]
 
-    def execute_random(self):
+    def execute_random_selection(self):
         """
         Executes the node by randomly selecting one of the outputs based on the
         probabilities assigned to each output.
