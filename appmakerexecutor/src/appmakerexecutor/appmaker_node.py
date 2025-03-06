@@ -156,6 +156,7 @@ class AppMakerNode:
         elif self.label == "Random":
             next_node = self.execute_random()
         elif self.label == "End":
+            time.sleep(1) # Delay to catch the websocket messages in Locsys
             next_node = None
         elif self.label == "Thread split":
             next_node = self.execute_thread_split()

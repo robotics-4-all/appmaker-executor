@@ -91,6 +91,10 @@ class StorageHandler:
             rpc_name=f"goaldsl.{self.uid}.killall_sync",
         )
 
+        self.variables_publisher = self.commlib_node.create_publisher(
+            topic="appcreator.variables"
+        )
+
         self.identify_subscribers_and_start_them()
 
         self.commlib_node.run()
@@ -531,6 +535,14 @@ class StorageHandler:
                 "key": key,
                 "value": value
             })
+
+        variables_publish_payload = {
+            "name": key,
+            "value": value,
+            "type": type(value).__name__
+        }
+        self.variables_publisher.publish(variables_publish_payload)
+        print(f"Published: {variables_publish_payload}")
         return True
 
     def delete(self, key):
