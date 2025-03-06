@@ -214,14 +214,17 @@ class StorageHandler:
             None
         """
         self.logger.info("Received message on goaldsl topic: %s", message)
-
-        if self.publisher is not None:
-            self.publisher.publish({
-                "type": "storage",
-                "action": "set",
-                "key": topic,
-                "value": message,
-            })
+        if "type" in message and message["type"] in ["scenario_update", "scenario_started"]:
+            score = 0
+            if message["type"] == "scenario_update":
+                score = message['data']["score"]
+            if self.publisher is not None:
+                self.publisher.publish({
+                    "node_id": None,
+                    "message": score,
+                    "label": "Score",
+                    "timestamp": time.time(),
+                })
 
     def start_subscriber(self, action, broker, callback, literal = None):
         """
