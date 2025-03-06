@@ -1,0 +1,7 @@
+services:
+  appexecutor:
+    image: appexecutor
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    network_mode: host
+    env_file:
+      - ./.env
