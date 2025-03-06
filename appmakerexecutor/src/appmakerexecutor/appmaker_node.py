@@ -153,7 +153,7 @@ class AppMakerNode:
         self.publish("start")
         if self.label == "Condition":
             next_node = self.execute_condition()
-        elif self.label == "Random":
+        elif self.label == "Random selection":
             next_node = self.execute_random()
         elif self.label == "End":
             time.sleep(1) # Delay to catch the websocket messages in Locsys
