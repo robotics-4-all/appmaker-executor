@@ -191,7 +191,6 @@ class StorageHandler:
         self.logger.info("Starting goaldsl")
         tmp = model[1:-1].replace("\\n", "\n").replace("\\t", "\t").\
             replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\")
-        print(tmp)
         self.goaldsl_start_rpc.call({'model': tmp})
 
     def stop_goaldsl(self):
@@ -219,9 +218,9 @@ class StorageHandler:
             None
         """
         self.logger.info("Received message on goaldsl topic: %s", message)
-        if "type" in message and message["type"] in ["scenario_update", "scenario_started"]:
+        if "type" in message and message["type"] in ["scenario_update", "scenario_started", "scenario_finished"]:
             score = 0
-            if message["type"] == "scenario_update":
+            if message["type"] == "scenario_update" or message["type"] == "scenario_finished":
                 score = message['data']["score"]
             if self.publisher is not None:
                 self.publisher.publish({
@@ -236,6 +235,8 @@ class StorageHandler:
                     "goaldsl_id": self.goaldsl_id,
                     "update": message
                 })
+
+                print(message)
 
     def start_subscriber(self, action, broker, callback, literal = None):
         """
@@ -626,7 +627,7 @@ class StorageHandler:
             expression = self.replace_variables(expression)
             return eval(expression) # pylint: disable=eval-used
         except Exception as e: # pylint: disable=broad-except
-            self.logger.warning("- Value %s could not be evaluated. Probably a string: %s", expression, e)
+            self.logger.info("- Value %s could not be evaluated. Probably a string: %s", expression, e)
             return expression
 
     def replace_variables(self, expression):
@@ -658,7 +659,7 @@ class StorageHandler:
             pattern = r"\|(.*?)\|"
             matches = re.findall(pattern, expression)
             for match in matches:
-                self.logger.warning("Handling this evaluation: %s", match)
+                self.logger.info("Handling this evaluation: %s", match)
                 variable_value = eval(match) # pylint: disable=eval-used
                 if variable_value is not None:
                     expression = expression.replace("|" + match + "|", str(variable_value))
