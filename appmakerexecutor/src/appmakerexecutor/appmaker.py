@@ -159,13 +159,13 @@ class AppMaker:
             topic=f'appcreator.{self.uid}.deploy',
             on_message=self.on_message
         )
-        self.logger.warning("Subscribed to %s", f'appcreator.{self.uid}.deploy')
+        self.logger.info("Subscribed to %s", f'appcreator.{self.uid}.deploy')
 
         self.commlib_node.create_subscriber(
             topic=f'appcreator.{self.uid}.stop',
             on_message=self.on_message_stop
         )
-        self.logger.warning("Subscribed to %s", f'appcreator.{self.uid}.stop')
+        self.logger.info("Subscribed to %s", f'appcreator.{self.uid}.stop')
 
         self.scores_publisher = self.commlib_node.create_publisher(
             topic='appcreator.scores',
