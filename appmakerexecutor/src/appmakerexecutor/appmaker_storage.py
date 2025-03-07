@@ -586,7 +586,7 @@ class StorageHandler:
         """
         value = {} # To suppress the warning
         try:
-            self.logger.warning("Handling this variable: %s", expression)
+            self.logger.info("Handling this variable: %s", expression)
             items = expression.split(".")
             for i, item in enumerate(items):
                 # Regex for array[integer] item
@@ -599,7 +599,7 @@ class StorageHandler:
                     # else:
                     value = self.get(item)
                 else:
-                    try: 
+                    try:
                         item = int(item)
                     except: 
                         pass
@@ -648,6 +648,9 @@ class StorageHandler:
             for match in matches:
                 variable_value = self.handle_variable_string(match)
                 if variable_value is not None:
+                    self.logger.info("- Variable value is %s", variable_value)
+                    if isinstance(variable_value, str):
+                        variable_value = f'"{variable_value}"'
                     expression = expression.replace("{" + match + "}", str(variable_value))
             self.logger.info("- Replaced expression: %s", expression)
 
