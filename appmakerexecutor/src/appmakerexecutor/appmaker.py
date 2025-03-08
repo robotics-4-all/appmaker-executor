@@ -51,6 +51,7 @@ class AppMaker:
         self.logger = logging.getLogger(__name__)
         self.current_process = None
         self.streamsim_reset_rpc_client = None
+        self.goaldsl_reset_rpc_client = None
         self.scores_publisher = None
         self.execution_uid = None
 
@@ -120,6 +121,9 @@ class AppMaker:
             self.logger.critical("Stopping stream simulator")
             self.streamsim_reset_rpc_client.call({}, timeout=3)
             self.logger.critical("Stream simulator stopped")
+            self.logger.critical("Stopping goal DSL")
+            self.goaldsl_reset_rpc_client.call({}, timeout=3)
+            self.logger.critical("Goal DSL stopped")
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
@@ -186,6 +190,10 @@ class AppMaker:
 
         self.streamsim_reset_rpc_client = self.local_commlib_node.create_rpc_client(
             rpc_name=f"streamsim.{self.uid}.reset",
+        )
+
+        self.goaldsl_reset_rpc_client = self.local_commlib_node.create_rpc_client(
+            rpc_name=f"goaldsl.{self.uid}.killall_sync",
         )
 
         self.local_commlib_node.create_subscriber(
