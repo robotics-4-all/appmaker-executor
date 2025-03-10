@@ -152,6 +152,7 @@ class AppMaker:
             ssl=broker_ssl,
             username=broker_username,
             password=broker_password,
+            reconnect_attempts=0,
         )
 
         self.commlib_node = CommlibNode(node_name=f'locsys.app_executor_node.{self.uid}',
