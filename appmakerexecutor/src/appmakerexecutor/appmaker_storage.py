@@ -192,6 +192,7 @@ class StorageHandler:
         tmp = model[1:-1].replace("\\n", "\n").replace("\\t", "\t").\
             replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\")
         self.goaldsl_start_rpc.call({'model': tmp})
+        time.sleep(2)
 
     def stop_goaldsl(self):
         """
@@ -203,9 +204,9 @@ class StorageHandler:
         Returns:
             None
         """
+        time.sleep(1)
         self.logger.info("Resetting goaldsl")
         self.goaldsl_reset_rpc.call({})
-        time.sleep(2)
 
     def handle_goaldsl_message(self, message, _):
         """
