@@ -593,6 +593,10 @@ class AppMakerNode:
                 evaluated_index = self.storage_handler.evaluate(self.parameters[4]['value'])
                 stored_list.remove(evaluated_index)
                 self.storage_handler.set(self.parameters[0]['value'], stored_list)
+            elif self.parameters[1]['value'] == "Set element by index":
+                evaluated_index = self.storage_handler.evaluate(self.parameters[5]['value'])
+                stored_list[evaluated_index] = self.storage_handler.evaluate(self.parameters[6]['value'])
+                self.storage_handler.set(self.parameters[0]['value'], stored_list)
             elif self.parameters[2]['value'] == "Average":
                 meanvalue = sum(stored_list)/len(stored_list)
                 variable_name = self.parameters[1]['value']
