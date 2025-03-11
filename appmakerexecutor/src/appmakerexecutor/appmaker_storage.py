@@ -51,7 +51,7 @@ class StorageHandler:
         stop():
             Stops the storage handler.
     """
-    def __init__(self, uid, model):
+    def __init__(self, uid, model, stop_publisher):
         self.storage = {}
         self.subscribers = {}
         self.publishers = {}
@@ -61,6 +61,7 @@ class StorageHandler:
         self.model = model
         self.uid = uid
         self.goaldsl_id = None
+        self.stop_publisher = stop_publisher
         self.logger = logging.getLogger(__name__)
 
         self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
@@ -235,7 +236,29 @@ class StorageHandler:
                     "update": message
                 })
 
-                print(message)
+            if message["type"] == "scenario_finished":
+                # check for fatals
+                if "fatal_goals" in message["data"]:
+                    # Iterate through the fatal goals
+                    for fatal_goal in message["data"]["fatal_goals"]:
+                        if fatal_goal["state"] == "COMPLETED":
+                            print("Fatal goal completed")
+                            if self.stop_publisher is not None:
+                                # Inform UI for stop
+                                self.publisher.publish({
+                                    "node_id": None,
+                                    "message": "runtime_error: Fatal goal triggered!",
+                                    "label": None,
+                                    "timestamp": time.time(),
+                                })
+                                print("Sent end to UI")
+                                time.sleep(1)
+                                self.stop_publisher.publish({
+                                    "node_id": None,
+                                    "message": "Fatal goal triggered!",
+                                    "label": "Fatal",
+                                })
+                                time.sleep(1)
 
     def start_subscriber(self, action, broker, callback, literal = None):
         """
