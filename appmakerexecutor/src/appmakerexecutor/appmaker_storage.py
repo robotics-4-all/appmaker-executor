@@ -51,7 +51,7 @@ class StorageHandler:
         stop():
             Stops the storage handler.
     """
-    def __init__(self, uid, model):
+    def __init__(self, uid, model, stop_publisher):
         self.storage = {}
         self.subscribers = {}
         self.publishers = {}
@@ -61,6 +61,7 @@ class StorageHandler:
         self.model = model
         self.uid = uid
         self.goaldsl_id = None
+        self.stop_publisher = stop_publisher
         self.logger = logging.getLogger(__name__)
 
         self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
@@ -192,6 +193,7 @@ class StorageHandler:
         tmp = model[1:-1].replace("\\n", "\n").replace("\\t", "\t").\
             replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\")
         self.goaldsl_start_rpc.call({'model': tmp})
+        time.sleep(2)
 
     def stop_goaldsl(self):
         """
@@ -203,11 +205,11 @@ class StorageHandler:
         Returns:
             None
         """
+        time.sleep(1)
         self.logger.info("Resetting goaldsl")
         self.goaldsl_reset_rpc.call({})
-        time.sleep(2)
 
-    def handle_goaldsl_message(self, message, topic):
+    def handle_goaldsl_message(self, message, _):
         """
         Handle messages received on the goaldsl topic.
 
@@ -218,14 +220,12 @@ class StorageHandler:
             None
         """
         self.logger.info("Received message on goaldsl topic: %s", message)
-        if "type" in message and message["type"] in ["scenario_update", "scenario_started", "scenario_finished"]:
-            score = 0
-            if message["type"] == "scenario_update" or message["type"] == "scenario_finished":
-                score = message['data']["score"]
+        if "type" in message and message["type"] in \
+                ["scenario_update", "scenario_started", "scenario_finished"]:
             if self.publisher is not None:
                 self.publisher.publish({
                     "node_id": None,
-                    "message": score,
+                    "message": message,
                     "label": "Score",
                     "timestamp": time.time(),
                 })
@@ -236,7 +236,29 @@ class StorageHandler:
                     "update": message
                 })
 
-                print(message)
+            if message["type"] == "scenario_finished":
+                # check for fatals
+                if "fatal_goals" in message["data"]:
+                    # Iterate through the fatal goals
+                    for fatal_goal in message["data"]["fatal_goals"]:
+                        if fatal_goal["state"] == "COMPLETED":
+                            print("Fatal goal completed")
+                            if self.stop_publisher is not None:
+                                # Inform UI for stop
+                                self.publisher.publish({
+                                    "node_id": None,
+                                    "message": "runtime_error: Fatal goal triggered!",
+                                    "label": None,
+                                    "timestamp": time.time(),
+                                })
+                                print("Sent end to UI")
+                                time.sleep(1)
+                                self.stop_publisher.publish({
+                                    "node_id": None,
+                                    "message": "Fatal goal triggered!",
+                                    "label": "Fatal",
+                                })
+                                time.sleep(1)
 
     def start_subscriber(self, action, broker, callback, literal = None):
         """
@@ -408,14 +430,18 @@ class StorageHandler:
         Handles the execution of an action call.
 
         This method checks if an action client for the given action topic exists.
-        If not, it creates a new action client, runs it, and stores it in the action_clients dictionary.
-        It then prepares the payload by deep copying the initial payload and iterating through it to replace variables.
+        If not, it creates a new action client, runs it, and stores it in the action_clients 
+        dictionary.
+        It then prepares the payload by deep copying the initial payload and iterating through it 
+        to replace variables.
         Finally, it sends the goal to the action client and waits for the result.
 
         Args:
-            action (dict): A dictionary containing the action details, including the 'topic' and 'payload'.
+            action (dict): A dictionary containing the action details, including the 'topic' and 
+            'payload'.
             broker (object): The broker object associated with the action.
-            parameters (dict): A dictionary of parameters to be used for replacing variables in the payload.
+            parameters (dict): A dictionary of parameters to be used for replacing variables in 
+            the payload.
 
         Returns:
             object: The result of the action call.
@@ -446,7 +472,8 @@ class StorageHandler:
             payload
         )
         self.logger.info("Action called")
-        response = self.action_clients[_topic]['action'].get_result(wait=True, timeout=120, wait_max_sec=120)
+        response = self.action_clients[_topic]['action'].get_result(wait=True, \
+            timeout=120, wait_max_sec=120)
         return response
 
     def iterate_payload(self, payload, parameters):
@@ -602,7 +629,7 @@ class StorageHandler:
                 else:
                     try:
                         item = int(item)
-                    except: 
+                    except: # pylint: disable=bare-except
                         pass
                     value = value[item]
                     # check if it is number, else put it on quotes
@@ -627,7 +654,8 @@ class StorageHandler:
             expression = self.replace_variables(expression)
             return eval(expression) # pylint: disable=eval-used
         except Exception as e: # pylint: disable=broad-except
-            self.logger.info("- Value %s could not be evaluated. Probably a string: %s", expression, e)
+            self.logger.info("- Value %s could not be evaluated. Probably a string: %s", \
+                expression, e)
             return expression
 
     def replace_variables(self, expression):

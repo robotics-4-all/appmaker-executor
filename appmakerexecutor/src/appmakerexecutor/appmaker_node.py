@@ -713,6 +713,7 @@ class AppMakerNode:
         print("Selected form condition: ", next_node_index)
         if next_node_index >= len(self.connection_list):
             next_node_index = len(self.connection_list) - 1 # The else condition
+            print("We are in the default case", next_node_index)
         real_output = self.find_proper_output_index_in_connections(next_node_index)
         if real_output == -1:
             print("!!!!!! ----->>>> Error in selecting the next node")
