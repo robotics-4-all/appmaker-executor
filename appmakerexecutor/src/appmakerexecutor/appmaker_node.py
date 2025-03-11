@@ -4,6 +4,7 @@ File that initializes an Node of the AppMaker DSL.
 
 import time
 import random
+import json
 
 class AppMakerNode:
     """
@@ -198,6 +199,8 @@ class AppMakerNode:
             next_node = self.execute_delay()
         elif self.label == "Create variable" or self.label == "Set variable" or self.label == "Create List":
             next_node = self.execute_set_variable()
+        elif self.label == "Create variables":
+            next_node = self.execute_set_variables()
         elif self.label == "List operation" or self.label == "Manage list":
             next_node = self.execute_list_operation()
         elif self.label == "Log":
@@ -499,6 +502,39 @@ class AppMakerNode:
         evaluated = self.storage_handler.evaluate(variable_value)
         print("Setting variable: ", variable_name, " ", evaluated)
         self.storage_handler.set(variable_name, evaluated)
+        return list(self.connections.keys())[0]
+
+    def execute_set_variables(self):
+        """
+        Executes the set variables operation.
+
+        Iterates through an array of variable objects, evaluating each value 
+        and storing it using self.storage_handler.
+
+        Returns:
+            str: The key of the first connection.
+        """
+        try:
+            variables = json.loads(self.parameters[0]['value'])
+        except json.JSONDecodeError:
+            print("Error: Invalid JSON format for variables")
+            return None
+
+        for var in variables:
+            variable_name = var.get("name")
+            variable_value = var.get("value")
+
+            if variable_name is None:
+                print("Skipping variable with missing name:", var)
+                continue
+
+            if variable_value == '' and self.parameters[0].get('id') == "List":
+                variable_value = []
+
+            evaluated = self.storage_handler.evaluate(variable_value)
+            print(f"Setting variable: {variable_name} {evaluated}")
+            self.storage_handler.set(variable_name, evaluated)
+
         return list(self.connections.keys())[0]
 
     def execute_random_number(self):
