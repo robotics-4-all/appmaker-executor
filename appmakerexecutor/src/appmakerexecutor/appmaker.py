@@ -216,6 +216,17 @@ if __name__ == "__main__":
     try:
         while True:
             time.sleep(0.1)
+            if not appmaker.commlib_node.health:
+                try:
+                    print("Connection lost, restarting nodes")
+                    appmaker.commlib_node.stop()
+                    del appmaker.commlib_node
+                    appmaker.local_commlib_node.stop()
+                    del appmaker.local_commlib_node
+                    time.sleep(1)
+                except Exception as e: # pylint: disable=broad-except
+                    print("Error stopping nodes", e)
+                appmaker.run()
     except KeyboardInterrupt:
         try:
             appmaker.commlib_node.stop()
