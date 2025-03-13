@@ -193,7 +193,7 @@ class AppMakerNode:
             next_node = None
         elif self.label == "Thread split":
             next_node = self.execute_thread_split()
-        elif self.label == "Preempt":
+        elif self.label == "Kill process":
             next_node = self.execute_preempt()
         elif self.label == "Delay":
             next_node = self.execute_delay()

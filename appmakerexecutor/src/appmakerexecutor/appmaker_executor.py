@@ -296,7 +296,7 @@ class AppMakerExecutor(CommlibNode):
 
         # Find the preempt nodes
         for _, node in self.nodes.items():
-            if node.label == "Preempt":
+            if node.label == "Kill process":
                 thread_parameter = node.parameters[0]['value']
                 # Split the thread parameter by :
                 thread_parameter = thread_parameter.split(":")
