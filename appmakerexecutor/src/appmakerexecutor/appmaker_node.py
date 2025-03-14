@@ -201,6 +201,8 @@ class AppMakerNode:
             next_node = self.execute_set_variable()
         elif self.label == "Create variables":
             next_node = self.execute_set_variables()
+        elif self.label == "Operations between lists":
+            next_node = self.execute_operation_between_lists()
         elif self.label == "List operation" or self.label == "Manage list":
             next_node = self.execute_list_operation()
         elif self.label == "Log":
@@ -585,6 +587,39 @@ class AppMakerNode:
             print("Setting variable: ", variable_name, " ", evaluated)
             self.storage_handler.set(variable_name, evaluated)
             return list(self.connections.keys())[0]
+        except Exception as e: # pylint: disable=broad-except
+            self.handle_runtime_error(e)
+            return None
+
+    def execute_operation_between_lists(self):
+        """
+        Executes various operations between two lists based on the parameters provided.
+
+        The method retrieves two lists from storage, performs an operation on them 
+        (such as copying or appending), and then updates the storage with the result.
+
+        Operations:
+            - "Copy": Replaces the target list with the source list.
+            - "Append": Appends the contents of the source list to the target list.
+
+        Returns:
+            str: The key of the next node to be executed, or None if an error occurs.
+
+        Raises:
+            Exception: If any error occurs during the execution of the list operation.
+        """
+        try: 
+            source_list = self.storage_handler.get(self.parameters[0]['value'])
+            target_list = self.storage_handler.get(self.parameters[1]['value'])
+            target_list_obj = self.parameters[1]['value']
+            
+            if self.parameters[2]['value'] == "Copy":
+                self.storage_handler.set(target_list_obj, source_list)
+            elif self.parameters[2]['value'] == "Append":
+                target_list.extend(source_list)
+                self.storage_handler.set(target_list_obj, target_list)
+            return list(self.connections.keys())[0]
+
         except Exception as e: # pylint: disable=broad-except
             self.handle_runtime_error(e)
             return None
