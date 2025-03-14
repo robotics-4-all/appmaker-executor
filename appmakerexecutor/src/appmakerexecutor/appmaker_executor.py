@@ -257,6 +257,9 @@ class AppMakerExecutor(CommlibNode):
                         delay_in_param = n["parameters"]["parameters"][0]["value"]
                         if delay_in_param != self.node_executors[_id].artificial_delay:
                             self.node_executors[_id].artificial_delay = delay_in_param
+                        # Health insurance
+                        if float(self.node_executors[_id].artificial_delay) < 0.001:
+                            self.node_executors[_id].artificial_delay = str(0.001)
 
                 print("Artificial delay: ", self.node_executors[_id].artificial_delay)
 
