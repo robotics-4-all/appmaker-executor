@@ -174,6 +174,7 @@ class AppMakerNode:
         Returns:
             next_node: The next node to be executed.
         """
+        self.storage_handler.operations += 1
         next_node = None
         if self.is_preempted:
             print("Node: ", self.id, " ", self.label, " is preempted")

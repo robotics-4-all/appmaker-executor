@@ -65,6 +65,7 @@ class StorageHandler:
         self.model = model
         self.uid = uid
         self.goaldsl_id = None
+        self.operations = 0
         self.stop_publisher = stop_publisher
         self.logger = logging.getLogger(__name__)
 
@@ -234,6 +235,8 @@ class StorageHandler:
                     "timestamp": time.time(),
                 })
 
+                message["data"]["operations"] = self.operations
+                # self.logger.info("Publishing scores: %s", message)
                 self.scores_publisher.publish({
                     "user_id": self.uid,
                     "goaldsl_id": self.goaldsl_id,
