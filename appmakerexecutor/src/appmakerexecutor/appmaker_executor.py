@@ -184,6 +184,19 @@ class AppMakerExecutor(CommlibNode):
             print("A thread split was found: ", self.nodes[node_id].count)
             # Find the corresponding thread join node
             thread_join_id = self.find_corresponding_thread_join(node_id)
+            if thread_join_id is None:
+                time.sleep(1)
+                self.publisher.publish({
+                    "message": {"message": "runtime_error: Thread join not found for thread split"},
+                })
+                print("Sent end to UI")
+                time.sleep(1)
+                self.stop_publisher.publish({
+                    "node_id": None,
+                    "message": "Thread join not found for thread split",
+                    "label": "Fatal",
+                })
+                time.sleep(1)
             print("The corresponding thread join is: ", self.nodes[thread_join_id].count)
             self.nodes[node_id].next_join = thread_join_id
             # Add the node to the executor
