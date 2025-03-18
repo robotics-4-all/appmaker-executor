@@ -615,7 +615,7 @@ class AppMakerNode:
             target_list_obj = self.parameters[1]['value']
             
             if self.parameters[2]['value'] == "Copy":
-                self.storage_handler.set(target_list_obj, source_list)
+                self.storage_handler.set(target_list_obj, source_list[:])
             elif self.parameters[2]['value'] == "Append":
                 target_list.extend(source_list)
                 self.storage_handler.set(target_list_obj, target_list)
