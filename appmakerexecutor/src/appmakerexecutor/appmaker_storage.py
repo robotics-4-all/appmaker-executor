@@ -642,6 +642,7 @@ class StorageHandler:
                     # check if it is number, else put it on quotes
                     if not isinstance(value, (int, float, list, dict)):
                         value = f'"{value}"'
+                        value = value.replace('""', '"')
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error during evaluation: %s", e)
 
@@ -688,6 +689,8 @@ class StorageHandler:
                     if isinstance(variable_value, str):
                         variable_value = f'"{variable_value}"'
                     expression = expression.replace("{" + match + "}", str(variable_value))
+
+            expression = expression.replace("\"\"", "\"")
             self.logger.info("- Replaced expression: %s", expression)
 
             # Handle evaluations
