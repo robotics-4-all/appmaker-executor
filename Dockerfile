@@ -4,7 +4,7 @@ WORKDIR /appexecutor
 
 RUN apt-get update && apt upgrade  -y
 
-RUN pip install python-dotenv
+RUN pip install python-dotenv numpy
 
 RUN pip install https://github.com/robotics-4-all/commlib-py/archive/devel.zip -U
 
