@@ -1,0 +1,13 @@
+# Logging Parameters
+APPMAKER_ZERO_LOGS=1  # Disable python logging module horizontally
+APPMAKER_LOG_LEVEL="WARNING"  # Sets the log level of the instance loggers
+
+# Broker Parameters
+USE_REDIS=1
+BROKER_HOST=BROKER_HOST:str
+BROKER_PORT=BROKER_PORT:int
+BROKER_SSL=True:bool
+BROKER_USERNAME=USERNAME_HERE:str
+BROKER_PASSWORD=PASSWORD_HERE:str
+
+UID=XXX  # LocSys UID for the user

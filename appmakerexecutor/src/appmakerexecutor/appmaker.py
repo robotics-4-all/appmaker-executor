@@ -16,6 +16,8 @@ from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParame
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
 
 from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=import-error
+import config as CONFIG # type: ignore # pylint: disable=import-error
+
 
 def start_executor(uid, feedback_topic, conn_params, message):
     """
@@ -38,6 +40,7 @@ def start_executor(uid, feedback_topic, conn_params, message):
     amexe.load_model(message)
     amexe.execute()
 
+
 class AppMaker:
     """
     A class that initializes an AppMakerExecutor.
@@ -48,12 +51,20 @@ class AppMaker:
         self.local_commlib_node = None
         self.amexe = None
         self.conn_params = None
-        self.logger = logging.getLogger(__name__)
         self.current_process = None
         self.streamsim_reset_rpc_client = None
         self.goaldsl_reset_rpc_client = None
         self.scores_publisher = None
         self.execution_uid = None
+
+        self._logger = logging.getLogger(__name__)
+        self._logger.setLevel(CONFIG.LOG_LEVEL)
+        if CONFIG.ZERO_LOGS:
+            logging.disable()
+
+    @property
+    def logger(self):
+        return self._logger
 
     def on_message(self, message):
         """
