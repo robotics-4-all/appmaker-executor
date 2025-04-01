@@ -19,6 +19,10 @@ from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=
 import config as CONFIG # type: ignore # pylint: disable=import-error
 
 
+if CONFIG.ZERO_LOGS: logging.disable()
+else: logging.getLogger().setLevel(CONFIG.LOG_LEVEL)
+
+
 def start_executor(uid, feedback_topic, conn_params, message):
     """
     Initializes and starts the AppMakerExecutor with the provided parameters.
@@ -58,9 +62,6 @@ class AppMaker:
         self.execution_uid = None
 
         self._logger = logging.getLogger(__name__)
-        self._logger.setLevel(CONFIG.LOG_LEVEL)
-        if CONFIG.ZERO_LOGS:
-            logging.disable()
 
     @property
     def logger(self):
@@ -214,6 +215,7 @@ class AppMaker:
         )
 
         self.local_commlib_node.run()
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
