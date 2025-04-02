@@ -192,7 +192,13 @@ class AppMaker:
 
         # ---------- Redis interfaces ----------
         self.local_commlib_node = CommlibNode(node_name='locsys.app_executor_node_local',
-            connection_params=RedisConnectionParameters(),
+            connection_params=RedisConnectionParameters(
+                host=CONFIG.REDIS_HOST,
+                port=CONFIG.REDIS_PORT,
+                username=CONFIG.REDIS_USERNAME,
+                password=CONFIG.REDIS_PASSWORD,
+                db=CONFIG.REDIS_DB
+            ),
             heartbeats=False,
             debug=True)
 
