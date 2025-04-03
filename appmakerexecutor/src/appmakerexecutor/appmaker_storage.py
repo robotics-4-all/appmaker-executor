@@ -16,6 +16,9 @@ import numpy as np # pylint: disable=unused-import
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
 
+import config as CONFIG # type: ignore # pylint: disable=import-error
+
+
 class StorageHandler:
     """
     A class to handle storage operations, communication with subscribers,
@@ -71,6 +74,11 @@ class StorageHandler:
 
         self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
             connection_params=RedisConnectionParameters(
+                host=CONFIG.REDIS_HOST,
+                port=CONFIG.REDIS_PORT,
+                username=CONFIG.REDIS_USERNAME,
+                password=CONFIG.REDIS_PASSWORD,
+                db=CONFIG.REDIS_DB,
                 socket_timeout=60,
             ),
             heartbeats=False,

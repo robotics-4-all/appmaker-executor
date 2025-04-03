@@ -23,6 +23,7 @@ from commlib.transports.redis import ConnectionParameters as RedisConnectionPara
 from appmaker_node import AppMakerNode # type: ignore # pylint: disable=import-error
 from appmaker_node_executor import NodeExecutor # type: ignore # pylint: disable=import-error
 from appmaker_storage import StorageHandler # type: ignore # pylint: disable=import-error
+import config as CONFIG # type: ignore # pylint: disable=import-error
 
 class AppMakerExecutor(CommlibNode):
     """
@@ -83,7 +84,13 @@ class AppMakerExecutor(CommlibNode):
 
         # Local interfaces
         self.local_commlib_node = CommlibNode(node_name='sslocsys.app_executor_node_local',
-            connection_params=RedisConnectionParameters(),
+            connection_params=RedisConnectionParameters(
+                host=CONFIG.REDIS_HOST,
+                port=CONFIG.REDIS_PORT,
+                username=CONFIG.REDIS_USERNAME,
+                password=CONFIG.REDIS_PASSWORD,
+                db=CONFIG.REDIS_DB
+            ),
             heartbeats=False,
             debug=True)
 
