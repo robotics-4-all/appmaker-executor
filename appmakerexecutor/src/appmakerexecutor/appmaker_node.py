@@ -48,7 +48,7 @@ class AppMakerNode:
             and connections.
     """
     def __init__(self, data, publisher=None, storage_handler=None, brokers = None, stop_publisher=None):
-        print("\n\n", data)
+        # print("\n\n", data)
         self.data = data
         self.publisher = publisher
         self.storage_handler = storage_handler

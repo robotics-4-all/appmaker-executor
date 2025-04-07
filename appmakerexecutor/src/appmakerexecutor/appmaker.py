@@ -150,7 +150,7 @@ class AppMaker:
             load_dotenv()
             broker_host = os.getenv('BROKER_HOST', 'broker.emqx.io')
             broker_port = int(os.getenv('BROKER_PORT', "8883"))
-            broker_ssl = bool(os.getenv('BROKER_SSL', "True"))
+            broker_ssl = True if os.getenv('BROKER_SSL', "True").lower() == "true" else False
             broker_username = os.getenv('BROKER_USERNAME', '')
             broker_password = os.getenv('BROKER_PASSWORD', '')
         except Exception as e: # pylint: disable=broad-except
@@ -165,12 +165,14 @@ class AppMaker:
             username=broker_username,
             password=broker_password,
             reconnect_attempts=0,
+            tls_insecure=True,
         )
 
         self.commlib_node = CommlibNode(node_name=f'locsys.app_executor_node.{self.uid}',
             connection_params=self.conn_params,
             heartbeats=True,
             debug=True)
+        print("Connected to broker")
 
         self.commlib_node.create_subscriber(
             topic=f'appcreator.{self.uid}.deploy',
