@@ -60,6 +60,7 @@ class AppMaker:
         self.goaldsl_reset_rpc_client = None
         self.scores_publisher = None
         self.execution_uid = None
+        self.goaldsl_scores_publisher = None
 
         self._logger = logging.getLogger(__name__)
 
@@ -107,6 +108,11 @@ class AppMaker:
         """
         message['execution_uid'] = self.execution_uid
         self.scores_publisher.publish(message)
+
+        self.goaldsl_scores_publisher.publish({
+          'type': 'goaldsl_update',
+          'data': message,
+        })
 
     def on_message_stop(self, message): # pylint: disable=unused-argument
         """
@@ -188,6 +194,10 @@ class AppMaker:
 
         self.scores_publisher = self.commlib_node.create_publisher(
             topic='appcreator.scores',
+        )
+
+        self.goaldsl_scores_publisher = self.commlib_node.create_publisher(
+            topic=f'streamsim.{self.uid}.notify',
         )
 
         self.commlib_node.run()
