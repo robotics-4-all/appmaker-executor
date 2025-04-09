@@ -2,6 +2,7 @@
 File that initializes an Node of the AppMaker DSL.
 """
 
+import logging
 import time
 import random
 import json
@@ -48,7 +49,7 @@ class AppMakerNode:
             and connections.
     """
     def __init__(self, data, publisher=None, storage_handler=None, brokers = None, stop_publisher=None):
-        print("\n\n", data)
+        # print("\n\n", data)
         self.data = data
         self.publisher = publisher
         self.storage_handler = storage_handler
@@ -71,7 +72,11 @@ class AppMakerNode:
         self.artificial_delay = 0
         self.stop_publisher = stop_publisher
 
-        # pprint.pprint(data)
+        self._logger = logging.getLogger(__name__)
+
+    @property
+    def logger(self):
+        return self._logger
 
     def add_connection(self, node, connection):
         """
@@ -97,7 +102,7 @@ class AppMakerNode:
         Returns:
             None
         """
-        print("Publishing message to UI", message)
+        self.logger.debug("Publishing message to UI", message)
         if self.publisher is not None:
             self.publisher.publish({
                 "node_id": self.id,
@@ -116,7 +121,7 @@ class AppMakerNode:
         Returns:
             None
         """
-        print("!! Publishing stop message")
+        self.logger.debug("!! Publishing stop message")
         if self.stop_publisher is not None:
             self.stop_publisher.publish({
                 "node_id": self.id,
@@ -135,7 +140,7 @@ class AppMakerNode:
         using `self.storage_handler`.
 
         """
-        print("Received message: ", message)
+        self.logger.debug("Received message: ", message)
         if self.action_variable:
             self.storage_handler.set(self.action_variable, message)
 
@@ -153,7 +158,7 @@ class AppMakerNode:
             - Waits for a short period before publishing a stop message with the error details.
             - Prints internal publish status.
         """
-        print(f"An error occurred: {e}")
+        self.logger.error(f"An error occurred: {e}")
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
             "message": f"runtime_error: {e}",
@@ -161,10 +166,9 @@ class AppMakerNode:
             "timestamp": timestamp,
         })
         self.publish("end") # Inform the UI that the executor has finished
-        print("Published to UI")
+        self.logger.debug("Published to UI")
         time.sleep(1)
         self.publish_stop(f"An error occurred: {e}")
-        print("Internal publish")
         time.sleep(1)
 
     def execute(self):
@@ -177,7 +181,7 @@ class AppMakerNode:
         self.storage_handler.operations += 1
         next_node = None
         if self.is_preempted:
-            print("Node: ", self.id, " ", self.label, " is preempted")
+            self.logger.debug("Node: ", self.id, " ", self.label, " is preempted")
             return None
 
         self.publish("start")
@@ -242,7 +246,7 @@ class AppMakerNode:
                 #         break
                 correct_broker = None
                 # Find the operation. Start or stop?
-                print(">> Parameters: ", self.data['data']['parameters'])
+                self.logger.debug(">> Parameters: ", self.data['data']['parameters'])
                 for p in self.data['data']['parameters']:
                     if p['id'] == 'operation':
                         operation = p['value']
@@ -250,22 +254,23 @@ class AppMakerNode:
 
                 self.action_variable = action['storage']
 
-                print("The correct broker is: ", correct_broker)
+                self.logger.debug("The correct broker is: ", correct_broker)
                 if operation == "start":
-                    print("Attempting to start subscriber")
+                    self.logger.debug("Attempting to start subscriber")
                     self.storage_handler.start_subscriber(
                         action,
                         correct_broker,
                         self.on_message,
                     )
-                    print(">> Subscribing to: ", action['topic'])
+                    self.logger.debug(">> Subscribing to: ", action['topic'])
                 elif operation == "stop":
                     self.storage_handler.stop_subscriber(
                         action,
                         correct_broker,
                     )
                 else:
-                    print("Something went wrong with action: ", action, correct_broker, operation)
+                    self.logger.error("Something went wrong with action: ",
+                                      action, correct_broker, operation)
 
             elif action['type'] == "publish":
                 for p in self.data['data']['parameters']:
@@ -334,7 +339,7 @@ class AppMakerNode:
         # articifial delay
         time.sleep(self.storage_handler.evaluate(self.artificial_delay))
 
-        print("Next node is ", next_node)
+        self.logger.debug("Next node is ", next_node)
         self.publish("end")
         return next_node
 
@@ -368,7 +373,7 @@ class AppMakerNode:
         Returns:
             None
         """
-        print("Starting simulation")
+        self.logger.info("Starting simulation")
         model = self.parameters[0]['value']
         # Stop simulation before starting a new one
         self.storage_handler.reset_simulation()
@@ -398,9 +403,9 @@ class AppMakerNode:
         Returns:
             None
         """
-        print("Stopping simulation")
+        self.logger.info("Stopping simulation")
         resp = self.storage_handler.reset_simulation()
-        print("Simulation stopped: ", resp)
+        self.logger.info("Simulation stopped: ", resp)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
             "message": "Simulation stopped", 
@@ -424,12 +429,13 @@ class AppMakerNode:
             str: The first key from the connections dictionary.
         """
 
-        print("Starting goaldsl model")
+        self.logger.info("Starting GoalDSL model...")
         model = self.parameters[0]['value']
         model_id = self.parameters[0]['model_id']
         self.storage_handler.goaldsl_id = model_id
         # Start the new one
         self.storage_handler.deploy_goaldsl(model)
+        self.logger.info("Started GoalDSL model")
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
             "message": "Goaldsl started",
@@ -454,9 +460,9 @@ class AppMakerNode:
         Returns:
             str: The first key from the connections dictionary.
         """
-        print("Stopping goaldsl")
+        self.logger.info("Stopping GoalDSL")
         resp = self.storage_handler.stop_goaldsl()
-        print("Goaldsl stopped: ", resp)
+        self.logger.info("GoalDSL stopped: ", resp)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
             "message": "Goaldsl stopped", 
@@ -475,10 +481,10 @@ class AppMakerNode:
         Returns:
             str: The key of the first connection.
         """
-        print("Log: ", self.parameters)
+        self.logger.debug("Log: ", self.parameters)
         message = self.parameters[0]['value']
         message = self.storage_handler.replace_variables(message)
-        print("Log: ", message)
+        self.logger.debug("Log: ", message)
         # Get current time in literal format
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.publish({
@@ -503,7 +509,7 @@ class AppMakerNode:
         if self.parameters[0]['id'] == "List" and self.parameters[1]['value'] == '':
             variable_value = []
         evaluated = self.storage_handler.evaluate(variable_value)
-        print("Setting variable: ", variable_name, " ", evaluated)
+        self.logger.debug("Setting variable: ", variable_name, " ", evaluated)
         self.storage_handler.set(variable_name, evaluated)
         return list(self.connections.keys())[0]
 
@@ -520,7 +526,7 @@ class AppMakerNode:
         try:
             variables = json.loads(self.parameters[0]['value'])
         except json.JSONDecodeError:
-            print("Error: Invalid JSON format for variables")
+            self.logger.error("Error: Invalid JSON format for variables")
             return None
 
         for var in variables:
@@ -528,14 +534,14 @@ class AppMakerNode:
             variable_value = var.get("value")
 
             if variable_name is None:
-                print("Skipping variable with missing name:", var)
+                self.logger.warning("Skipping variable with missing name:", var)
                 continue
 
             if variable_value == '' and self.parameters[0].get('id') == "List":
                 variable_value = []
 
             evaluated = self.storage_handler.evaluate(variable_value)
-            print(f"Setting variable: {variable_name} {evaluated}")
+            self.logger.debug(f"Setting variable: {variable_name} {evaluated}")
             self.storage_handler.set(variable_name, evaluated)
 
         return list(self.connections.keys())[0]
@@ -558,7 +564,7 @@ class AppMakerNode:
             minimum = float(self.parameters[1]['value'])
             maximum = float(self.parameters[2]['value'])
             evaluated = random.uniform(minimum, maximum)
-            print("Setting variable: ", variable_name, " ", evaluated)
+            self.logger.debug("Setting variable: ", variable_name, " ", evaluated)
             self.storage_handler.set(variable_name, evaluated)
             return list(self.connections.keys())[0]
         except Exception as e: # pylint: disable=broad-except
@@ -585,7 +591,7 @@ class AppMakerNode:
             minimum = int(self.parameters[1]['value'])
             maximum = int(self.parameters[2]['value'])
             evaluated = random.randint(minimum, maximum)
-            print("Setting variable: ", variable_name, " ", evaluated)
+            self.logger.debug("Setting variable: ", variable_name, " ", evaluated)
             self.storage_handler.set(variable_name, evaluated)
             return list(self.connections.keys())[0]
         except Exception as e: # pylint: disable=broad-except
@@ -730,31 +736,31 @@ class AppMakerNode:
             str: The ID of the next node to be executed.
         """
         # Select one of the outputs at random
-        print("Executing node: ", self.id, " ", self.label)
+        self.logger.debug("Executing node: ", self.id, " ", self.label)
         next_node_index = 0
         for p in self.parameters:
-            print(">>", p['id'], " ", p['value'])
+            self.logger.debug(">>", p['id'], " ", p['value'])
             # Evaluate the condition
             result = False
             try:
                 result = self.storage_handler.evaluate(str(p['value']))
                 if isinstance(result, str):
                     result = False
-                print("Result: ", result)
+                self.logger.debug("Result: ", result)
             except Exception as e: # pylint: disable=broad-except
-                print("Error in evaluating the condition: ", e)
+                self.logger.debug("Error in evaluating the condition: ", e)
             if result:
                 break
             next_node_index += 1
-        print("Selected form condition: ", next_node_index)
+        self.logger.debug("Selected form condition: ", next_node_index)
         if next_node_index >= len(self.connection_list):
             next_node_index = len(self.connection_list) - 1 # The else condition
-            print("We are in the default case", next_node_index)
+            self.logger.debug("We are in the default case", next_node_index)
         real_output = self.find_proper_output_index_in_connections(next_node_index)
         if real_output == -1:
-            print("!!!!!! ----->>>> Error in selecting the next node")
+            self.logger.debug("!!!!!! ----->>>> Error in selecting the next node")
             return None
-        print("Real output = ", real_output)
+        self.logger.debug("Real output = ", real_output)
         return list(self.connections.keys())[real_output]
 
     def execute_random_selection(self):
@@ -766,20 +772,20 @@ class AppMakerNode:
             The selected output connection.
         """
         # Select one of the outputs at random
-        print("Executing node: ", self.id, " ", self.label)
+        self.logger.debug("Executing node: ", self.id, " ", self.label)
         # Gather all the parameters and evaluate them
         probabilities = [self.storage_handler.evaluate(x['value']) for x in self.parameters]
         prob_sum = sum(probabilities)
         random_prob = random.uniform(0, prob_sum)
-        print(self.connection_list)
-        print("Random probability: ", random_prob)
+        self.logger.debug(self.connection_list)
+        self.logger.debug("Random probability: ", random_prob)
         for i, prob in enumerate(probabilities):
             if random_prob < prob:
-                print("Selected: ", i)
+                self.logger.debug("Selected: ", i)
                 real_output = self.find_proper_output_index_in_connections(i)
                 return self.connection_list[real_output]['target']
             random_prob -= prob
-        print("Something went wrong, returning the last connection")
+        self.logger.debug("Something went wrong, returning the last connection")
         return self.connection_list[-1]['target']
 
     def execute_thread_split(self):
@@ -790,18 +796,18 @@ class AppMakerNode:
         It prints the node ID and label before executing the threads.
         """
         # We must start the executors threaded
-        print("Executing node: ", self.id, " ", self.label)
+        self.logger.debug("Executing node: ", self.id, " ", self.label)
         if self.executors:
-            print("Executing threads")
+            self.logger.debug("Executing threads")
             for _, executor in self.executors.items():
                 executor.finished = False
                 executor.execute_threaded()
-            print("Waiting for threads to finish")
+            self.logger.debug("Waiting for threads to finish")
             while True:
                 time.sleep(0.1)
                 # pylint: disable=consider-using-dict-items
                 if all([self.executors[e].finished for e in self.executors]):
-                    print("Threads finished")
+                    self.logger.debug("Threads finished")
                     break
         return self.next_join
 
@@ -817,7 +823,7 @@ class AppMakerNode:
         Returns:
             str: The key of the first connection in the `connections` dictionary.
         """
-        print("Executing node: ", self.id, " ", self.label)
+        self.logger.debug("Executing node: ", self.id, " ", self.label)
         self.executor_to_preempt.enforce_preemption()
         return list(self.connections.keys())[0]
 
@@ -829,14 +835,14 @@ class AppMakerNode:
             str: The ID of the next connected node.
         """
         # Wait for the delay time
-        print("Executing node: ", self.id, " ", self.label)
-        print(self.parameters)
+        self.logger.debug("Executing node: ", self.id, " ", self.label)
+        self.logger.debug(self.parameters)
         if 'value' not in self.parameters[0]:
-            print("Delay parameter not found")
+            self.logger.debug("Delay parameter not found")
             return None
-        print("Delay parameter: ", self.parameters[0]['value'])
+        self.logger.debug("Delay parameter: ", self.parameters[0]['value'])
         delay = self.storage_handler.evaluate(self.parameters[0]['value'])
-        print("Delay: ", delay)
+        self.logger.debug("Delay: ", delay)
         tt = 0
         while tt < float(delay) and not self.is_preempted:
             time.sleep(0.1)
@@ -853,8 +859,8 @@ class AppMakerNode:
         Returns:
             str: The key of the first connection.
         """
-        print("Executing node: ", self.id, " ", self.label)
-        print(list(self.connections.keys())[0])
+        self.logger.debug("Executing node: ", self.id, " ", self.label)
+        self.logger.debug(list(self.connections.keys())[0])
         return list(self.connections.keys())[0]
 
     def print_node(self):
@@ -862,10 +868,10 @@ class AppMakerNode:
         Print information about the node, including its ID, label, count, parameters, 
         and connections.
         """
-        print("Node: ", self.id, " ", self.label, " ", self.count)
-        print("Parameters: ")
+        self.logger.debug("Node: ", self.id, " ", self.label, " ", self.count)
+        self.logger.debug("Parameters: ")
         for p in self.parameters:
-            print("\t", p['id'], " ", p['value'] if 'value' in p else "")
-        print("Connections: ")
+            self.logger.debug("\t", p['id'], " ", p['value'] if 'value' in p else "")
+        self.logger.debug("Connections: ")
         for c in self.connections:
-            print("\tto ", c)
+            self.logger.debug("\tto ", c)
