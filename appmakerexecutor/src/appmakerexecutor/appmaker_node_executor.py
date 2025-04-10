@@ -84,7 +84,7 @@ class NodeExecutor:
         Returns:
             None
         """
-        self.logger.info("Executor: ", self.exec_type, " started")
+        self.logger.info("Executor: %s started", self.exec_type)
         # Make the is_preempted flag of all nodes false
         for _, node in self.nodes.items():
             node.artificial_delay = self.artificial_delay
@@ -93,8 +93,8 @@ class NodeExecutor:
         self.runner = self.starting_node
         while self.runner is not None and self.runner in self.nodes:
             self.runner = self.nodes[self.runner].execute()
-            self.logger.info("Runner: ", self.runner)
-        self.logger.info("Executor: ", self.exec_type, " finished")
+            self.logger.debug("Runner: %s", self.runner)
+        self.logger.info("Executor: %s finished", self.exec_type)
         self.finished = True
 
     def execute_threaded(self):

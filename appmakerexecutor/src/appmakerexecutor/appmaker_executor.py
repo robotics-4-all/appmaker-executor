@@ -16,7 +16,6 @@ Example usage:
     executor.execute()
 """
 
-import logging
 import time
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
@@ -66,11 +65,11 @@ class AppMakerExecutor(CommlibNode):
 
         if "feedback_topic" in kwargs:
             self.feedback_topic = kwargs["feedback_topic"].replace("/", ".")
-        self.logger().debug("Feedback topic: ", self.feedback_topic)
+        self.logger().debug("Feedback topic: %s", self.feedback_topic)
         del kwargs['feedback_topic']
         if "uid" in kwargs:
             self.uid = kwargs["uid"]
-        self.logger().debug("UID: ", self.uid)
+        self.logger().debug("UID: %s", self.uid)
         del kwargs['uid']
 
         super().__init__(
@@ -117,11 +116,11 @@ class AppMakerExecutor(CommlibNode):
         # Find the corresponding thread join node
         neighbors = [self.nodes[thread_split_id].connections[x]['target'] \
             for x in self.nodes[thread_split_id].connections]
-        self.logger().debug("\nInitial thread neighbors: ", [self.nodes[x].count for x in neighbors])
+        self.logger().debug("\nInitial thread neighbors: %s", [self.nodes[x].count for x in neighbors])
         final_joins = set()
         # Interate for each neighbor until the corresponding thread join is found
         for n in neighbors:
-            self.logger().debug("Initial thread neighbor for check: ", self.nodes[n].count)
+            self.logger().debug("Initial thread neighbor for check: %s", self.nodes[n].count)
             joins_found = 0
             splits_found = 1
             temp_neighbors = set([n])
@@ -136,17 +135,17 @@ class AppMakerExecutor(CommlibNode):
                     if _n in visited:
                         continue
                     visited.add(_n)
-                    self.logger().debug("Current node: ", self.nodes[_n].count)
+                    self.logger().debug("Current node: %s", self.nodes[_n].count)
                     if self.nodes[_n].label == "Thread join":
-                        self.logger().debug("Thread join found: ", self.nodes[_n].count)
+                        self.logger().debug("Thread join found: %s", self.nodes[_n].count)
                         joins_found += 1
-                        self.logger().debug("Joins found: ", joins_found)
+                        self.logger().debug("Joins found:%s ", joins_found)
                     elif self.nodes[_n].label == "Thread split":
                         splits_found += 1
-                        self.logger().debug("Splits found: ", splits_found)
+                        self.logger().debug("Splits found: %s", splits_found)
 
                     if joins_found == splits_found:
-                        self.logger().debug("We are done, the correct join is: ", self.nodes[_n].count)
+                        self.logger().debug("We are done, the correct join is: %s", self.nodes[_n].count)
                         final_joins.add(_n)
                         break
 
@@ -156,18 +155,18 @@ class AppMakerExecutor(CommlibNode):
                     _neighs.update([self.nodes[_n].connections[x]['target'] \
                         for x in self.nodes[_n].connections])
 
-                    self.logger().debug("\tCurrent neighbors: ", [self.nodes[x].count for x in _neighs])
+                    self.logger().debug("\tCurrent neighbors: %s", [self.nodes[x].count for x in _neighs])
                     break
 
                 temp_neighbors = _neighs.copy()
                 # Check if all the neighbors were visited
-                self.logger().debug("Visited: ", visited)
+                self.logger().debug("Visited: %s", visited)
                 for _n in temp_neighbors:
                     if _n not in visited:
                         all_visited = False
                         break
 
-        self.logger().debug("Final joins: ", [self.nodes[x].count for x in final_joins], '\n')
+        self.logger().debug("Final joins: %s", [self.nodes[x].count for x in final_joins])
         if len(final_joins) == 1:
             return final_joins.pop()
         else:
@@ -186,13 +185,13 @@ class AppMakerExecutor(CommlibNode):
         Returns:
             None
         """
-        self.logger().debug("Executor update for node ", self.nodes[node_id].count, ":", executor_id)
+        self.logger().debug("Executor update for node %s:%s", self.nodes[node_id].count, executor_id)
         # Check if the node is a terminator (unless the executor starts from the terminator)
         if self.nodes[node_id].label == "End":
-            self.logger().debug("The end was found: ", self.nodes[node_id].count)
+            self.logger().debug("The end was found: %s", self.nodes[node_id].count)
             return
         elif self.nodes[node_id].label == "Thread split":
-            self.logger().debug("A thread split was found: ", self.nodes[node_id].count)
+            self.logger().debug("A thread split was found: %s", self.nodes[node_id].count)
             # Find the corresponding thread join node
             thread_join_id = self.find_corresponding_thread_join(node_id)
             if thread_join_id is None:
@@ -208,26 +207,29 @@ class AppMakerExecutor(CommlibNode):
                     "label": "Fatal",
                 })
                 time.sleep(1)
-            self.logger().debug("The corresponding thread join is: ", self.nodes[thread_join_id].count)
+            self.logger().debug("The corresponding thread join is: %s", \
+                self.nodes[thread_join_id].count)
             self.nodes[node_id].next_join = thread_join_id
             # Add the node to the executor
             self.node_executors[executor_id].add_node(self.nodes[thread_join_id])
-            self.logger().debug("Thread join added to executor: ", executor_id)
+            self.logger().debug("Thread join added to executor: %s", executor_id)
             self.nodes_assigned_to_executors[thread_join_id] = executor_id
             # Update the executor
             self.executor_update(thread_join_id, executor_id)
         else:
-            self.logger().debug("Not stopping! Going for neighbors of ", self.nodes[node_id].count)
+            self.logger().debug("Not stopping! Going for neighbors of %s", \
+                self.nodes[node_id].count)
             # Find neighbors ids of the node
             neighbors = self.nodes[node_id].connections
             # Assign the neighbors to the executor
             for n in neighbors:
-                self.logger().debug("Neighbor: ", self.nodes[n].count)
+                self.logger().debug("Neighbor: %s", self.nodes[n].count)
                 if n not in self.nodes_assigned_to_executors:
                     self.logger().debug("Neighbor not assigned to executor yet, going for it")
                     self.nodes_assigned_to_executors[n] = executor_id
                     self.node_executors[executor_id].add_node(self.nodes[n])
-                    self.logger().debug("Node", self.nodes[n].count, "added to executor: ", executor_id)
+                    self.logger().debug("Node %s added to executor %s", self.nodes[n].count, \
+                        executor_id)
                     self.executor_update(n, executor_id)
 
     def load_model(self, model):
@@ -267,7 +269,7 @@ class AppMakerExecutor(CommlibNode):
         # Find Start nodes
         self.logger().debug("Starting executor finder")
         for _id, node in self.nodes.items():
-            self.logger().debug("\n\t## Checking node: ", node.count)
+            self.logger().debug("\n\t## Checking node: %s", node.count)
             if node.label == "Start":
                 self.node_executors[_id] = NodeExecutor("start")
                 self.node_executors[_id].set_starting_node(_id)
@@ -285,40 +287,37 @@ class AppMakerExecutor(CommlibNode):
                         if float(self.node_executors[_id].artificial_delay) < 0.001:
                             self.node_executors[_id].artificial_delay = str(0.001)
 
-                self.logger().debug("Artificial delay: ", self.node_executors[_id].artificial_delay)
+                self.logger().debug("Artificial delay: %s", \
+                    self.node_executors[_id].artificial_delay)
 
                 self.nodes_assigned_to_executors[_id] = _id
-                self.logger().debug("Starting executor for: ", self.nodes[_id].count,\
-                    "\n\n========================")
+                self.logger().debug("Starting executor for: %s", self.nodes[_id].count)
                 self.executor_update(_id, _id)
-                self.logger().debug("Executor updated for: ", self.nodes[_id].count,\
-                    "\n\n========================")
+                self.logger().debug("Executor updated for: %s", self.nodes[_id].count,)
 
             if self.nodes[_id].label == "Thread split":
                 # Start an executor from its neighbors
                 # Find neighbors ids of the node
                 neighbors = self.nodes[_id].connections
-                self.logger().debug("Thread split found: ", self.nodes[_id].count)
+                self.logger().debug("Thread split found: %s", self.nodes[_id].count)
                 for n in neighbors:
                     if n not in self.nodes_assigned_to_executors:
                         self.node_executors[n] = NodeExecutor("thread")
                         self.node_executors[n].set_starting_node(n)
                         self.node_executors[n].add_node(self.nodes[n])
                         self.nodes_assigned_to_executors[n] = n
-                        self.logger().debug("Thread executor for: ", self.nodes[n].count, \
-                            "\n\n========================")
+                        self.logger().debug("Thread executor for: %s", self.nodes[n].count)
                         self.executor_update(n, n)
-                        self.logger().debug("Executor updated for: ", self.nodes[n].count, \
-                            "\n\n========================")
+                        self.logger().debug("Executor updated for: %s", self.nodes[n].count)
                         # Adding the threads as executors to node
                         self.nodes[_id].executors[n] = self.node_executors[n]
 
         self.logger().debug("Executors: ")
         for e, executor in self.node_executors.items():
-            self.logger().debug("Executor: ", e, " ", executor.exec_type)
+            self.logger().debug("Executor: %s %s", e, executor.exec_type)
             self.logger().debug("Nodes: ")
             for n in executor.nodes:
-                self.logger().debug("\t", executor.nodes[n].label, " ", executor.nodes[n].count)
+                self.logger().debug("\t%s %s", executor.nodes[n].label, executor.nodes[n].count)
             self.logger().debug("\n")
 
         # Find the preempt nodes
@@ -339,7 +338,8 @@ class AppMakerExecutor(CommlibNode):
                             self.logger().debug(c, _node.connections[c])
                             if _node.connections[c]['sourceHandle'] == f"out_{thread_count}":
                                 node.executor_to_preempt = self.node_executors[c]
-                                self.logger().debug("Executor to preempt: ", c, " ", self.nodes[c].label)
+                                self.logger().debug("Executor to preempt: %s %s", c, \
+                                    self.nodes[c].label)
                                 break
 
     def execute(self):
@@ -357,7 +357,7 @@ class AppMakerExecutor(CommlibNode):
         # pylint: disable=consider-using-dict-items
         start_executors = [self.node_executors[e] for e in self.node_executors \
             if self.node_executors[e].exec_type == "start"]
-        self.logger().info("Start executors: ", start_executors)
+        self.logger().info("Start executors: %s", start_executors)
         for s in start_executors:
             s.execute_threaded()
 

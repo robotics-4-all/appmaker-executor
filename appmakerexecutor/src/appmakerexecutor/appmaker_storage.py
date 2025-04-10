@@ -72,7 +72,7 @@ class StorageHandler:
         self.stop_publisher = stop_publisher
         self._logger = logging.getLogger(__name__)
 
-        self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
+        self.commlib_node = CommlibNode(node_name="storage_commlib_node",
             connection_params=RedisConnectionParameters(
                 host=CONFIG.REDIS_HOST,
                 port=CONFIG.REDIS_PORT,
@@ -120,6 +120,12 @@ class StorageHandler:
 
     @property
     def logger(self):
+        """
+        Provides access to the logger instance.
+
+        Returns:
+            logging.Logger: The logger instance used for logging messages.
+        """
         return self._logger
 
     def fix_topic(self, topic):
@@ -157,6 +163,7 @@ class StorageHandler:
                                 # The variable is used, start the subscriber
                                 # Dynamically create a callback in the class
                                 topic = topic.replace(".", "_")
+                                # pylint: disable=unnecessary-lambda-assignment
                                 callback = lambda message, var=variable: self.set(var, message)
                                 self.start_subscriber(
                                     node['action'],
@@ -603,7 +610,7 @@ class StorageHandler:
             "type": type(value).__name__
         }
         self.variables_publisher.publish(variables_publish_payload)
-        self.logger.debug(f"Published: {variables_publish_payload}")
+        self.logger.debug("Published: %s", variables_publish_payload)
         return True
 
     def delete(self, key):
@@ -637,7 +644,7 @@ class StorageHandler:
             items = expression.split(".")
             for i, item in enumerate(items):
                 # Regex for array[integer] item
-                match = re.match(r"(.+)\[(\d+)\]", item)
+                # match = re.match(r"(.+)\[(\d+)\]", item)
                 if i == 0:
                     # if match:
                     #     array_name, index = match.groups()

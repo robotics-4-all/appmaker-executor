@@ -96,7 +96,7 @@ class AppMaker:
             self.current_process.start()
             self.current_process.join()
             self.current_process = None
-            self.logger.critical(f"Execution with id={self.execution_uid} finished")
+            self.logger.critical("Execution with id=%s finished", self.execution_uid)
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
