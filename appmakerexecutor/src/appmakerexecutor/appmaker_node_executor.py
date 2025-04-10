@@ -3,6 +3,7 @@ This file contains the NodeExecutor class, which is responsible for managing and
 series of nodes in a specified order.
 """
 
+import logging
 import threading
 
 class NodeExecutor:
@@ -39,6 +40,12 @@ class NodeExecutor:
         self.to_preempt = False
         self.is_preempted = False
         self.artificial_delay = 0
+
+        self._logger = logging.getLogger(__name__)
+
+    @property
+    def logger(self):
+        return self._logger
 
     def add_node(self, node):
         """
@@ -77,7 +84,7 @@ class NodeExecutor:
         Returns:
             None
         """
-        print("Executor: ", self.exec_type, " started")
+        self.logger.info("Executor: ", self.exec_type, " started")
         # Make the is_preempted flag of all nodes false
         for _, node in self.nodes.items():
             node.artificial_delay = self.artificial_delay
@@ -86,8 +93,8 @@ class NodeExecutor:
         self.runner = self.starting_node
         while self.runner is not None and self.runner in self.nodes:
             self.runner = self.nodes[self.runner].execute()
-            print("Runner: ", self.runner)
-        print("Executor: ", self.exec_type, " finished")
+            self.logger.info("Runner: ", self.runner)
+        self.logger.info("Executor: ", self.exec_type, " finished")
         self.finished = True
 
     def execute_threaded(self):

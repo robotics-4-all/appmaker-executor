@@ -70,7 +70,7 @@ class StorageHandler:
         self.goaldsl_id = None
         self.operations = 0
         self.stop_publisher = stop_publisher
-        self.logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(__name__)
 
         self.commlib_node = CommlibNode(node_name=f"${time.time()}_commlib_node",
             connection_params=RedisConnectionParameters(
@@ -117,6 +117,10 @@ class StorageHandler:
         self.identify_subscribers_and_start_them()
 
         self.commlib_node.run()
+
+    @property
+    def logger(self):
+        return self._logger
 
     def fix_topic(self, topic):
         """
@@ -257,7 +261,7 @@ class StorageHandler:
                     # Iterate through the fatal goals
                     for fatal_goal in message["data"]["fatal_goals"]:
                         if fatal_goal["state"] == "COMPLETED":
-                            print("Fatal goal completed")
+                            self.logger.critical("Fatal goal completed")
                             if self.stop_publisher is not None:
                                 # Inform UI for stop
                                 self.publisher.publish({
@@ -266,7 +270,7 @@ class StorageHandler:
                                     "label": None,
                                     "timestamp": time.time(),
                                 })
-                                print("Sent end to UI")
+                                self.logger.debug("Sent end to UI")
                                 time.sleep(1)
                                 self.stop_publisher.publish({
                                     "node_id": None,
@@ -304,7 +308,7 @@ class StorageHandler:
             self.logger.warning("Subscriber already exists for action: %s", _topic)
             return
 
-        self.logger.critical("Creating subscriber for action: %s : %s", _topic, literal)
+        self.logger.debug("Creating subscriber for action: %s : %s", _topic, literal)
         _subscriber = self.commlib_node.create_subscriber(
             topic=_topic,
             on_message=callback
@@ -317,7 +321,7 @@ class StorageHandler:
         }
 
         _subscriber.run()
-        self.logger.info("Subscriber created and started")
+        self.logger.debug("Subscriber created and started")
 
     def stop_subscriber(self, action, broker):
         """
@@ -339,7 +343,7 @@ class StorageHandler:
 
             self.subscribers[_topic]['subscriber'].stop()
             del self.subscribers[_topic]
-            self.logger.info("Subscriber stopped for action: %s", _topic)
+            self.logger.debug("Subscriber stopped for action: %s", _topic)
         else:
             self.logger.error("Active subscriber not found for action: %s", _topic)
 
@@ -363,7 +367,7 @@ class StorageHandler:
         _topic = self.fix_topic(action['topic'])
         if _topic not in self.publishers:
             # Add it
-            self.logger.info("Creating publisher for action: %s", _topic)
+            self.logger.debug("Creating publisher for action: %s", _topic)
             _topic = self.fix_topic(_topic)
             _publisher = self.commlib_node.create_publisher(
                 topic=_topic
@@ -376,13 +380,13 @@ class StorageHandler:
                 "initial_payload": action['payload']
             }
 
-        self.logger.info("Publishing the action")
+        self.logger.debug("Publishing the action")
         # Handle the the payload
         payload = copy.deepcopy(self.publishers[_topic]['initial_payload'])
-        self.logger.info("\tPayload: %s", payload)
+        self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
-        self.logger.info("\tIterated Payload: %s", payload)
+        self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
         self.publishers[_topic]['publisher'].publish(payload)
 
@@ -417,7 +421,7 @@ class StorageHandler:
                 rpc_name=_topic,
             )
             _rpc_call.run()
-            self.logger.info("Creating RPC client for action: %s", _topic)
+            self.logger.debug("Creating RPC client for action: %s", _topic)
 
             self.rpc_clients[_topic] = {
                 "rpc": _rpc_call,
@@ -425,19 +429,19 @@ class StorageHandler:
                 "initial_payload": action['payload']
             }
 
-        self.logger.info("RPC calling the action")
+        self.logger.debug("RPC calling the action")
         # Handle the the payload
         payload = copy.deepcopy(self.rpc_clients[_topic]['initial_payload'])
-        self.logger.info("\tPayload: %s", payload)
+        self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
-        self.logger.info("\tIterated Payload: %s", payload)
+        self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
         response = self.rpc_clients[_topic]['rpc'].call(
             payload,
             timeout=120,
         )
-        self.logger.info("RPC called with response: %s", response)
+        self.logger.debug("RPC called with response: %s", response)
         return response
 
     def action_action_call(self, action, broker, parameters):
@@ -467,7 +471,7 @@ class StorageHandler:
                 action_name=_topic,
             )
             _action_call.run()
-            self.logger.info("Creating Action client for action: %s", _topic)
+            self.logger.debug("Creating Action client for action: %s", _topic)
 
             self.action_clients[_topic] = {
                 "action": _action_call,
@@ -475,18 +479,18 @@ class StorageHandler:
                 "initial_payload": action['payload']
             }
 
-        self.logger.info("Action calling the action")
+        self.logger.debug("Action calling the action")
         # Handle the the payload
         payload = copy.deepcopy(self.action_clients[_topic]['initial_payload'])
-        self.logger.info("\tPayload: %s", payload)
+        self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
-        self.logger.info("\tIterated Payload: %s", payload)
+        self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
         self.action_clients[_topic]['action'].send_goal(
             payload
         )
-        self.logger.info("Action called")
+        self.logger.debug("Action called")
         response = self.action_clients[_topic]['action'].get_result(wait=True, \
             timeout=120, wait_max_sec=120)
         return response
@@ -533,20 +537,20 @@ class StorageHandler:
             else:
                 # Search for variables in the parameters
                 pattern = r'\{([^}]*)\}'
-                self.logger.info("\tPattern: %s", pattern)
-                self.logger.info("\tValue: %s", value)
+                self.logger.debug("\tPattern: %s", pattern)
+                self.logger.debug("\tValue: %s", value)
                 matches = re.findall(pattern, str(value))
-                self.logger.info("\tMatches: %s", matches)
+                self.logger.debug("\tMatches: %s", matches)
                 for match in matches:
                     for p in parameters:
                         if p['id'] == match:
-                            self.logger.info("\tMatch found: %s", match)
+                            self.logger.debug("\tMatch found: %s", match)
                             value = value.replace("{" + match + "}", str(p['value']))
-                            self.logger.info("\tValue replaced: %s", value)
+                            self.logger.debug("\tValue replaced: %s", value)
                             payload[key] = self.evaluate(value)
                             if payload[key] is None: # Evaluation failed, not a numeric value
                                 payload[key] = str(value)
-                            self.logger.info("\tPayload: %s", payload)
+                            self.logger.debug("\tPayload: %s", payload)
         return payload
 
     def set_publisher(self, publisher):
@@ -599,7 +603,7 @@ class StorageHandler:
             "type": type(value).__name__
         }
         self.variables_publisher.publish(variables_publish_payload)
-        print(f"Published: {variables_publish_payload}")
+        self.logger.debug(f"Published: {variables_publish_payload}")
         return True
 
     def delete(self, key):
@@ -629,7 +633,7 @@ class StorageHandler:
         """
         value = {} # To suppress the warning
         try:
-            self.logger.info("Handling this variable: %s", expression)
+            self.logger.debug("Handling this variable: %s", expression)
             items = expression.split(".")
             for i, item in enumerate(items):
                 # Regex for array[integer] item
@@ -670,7 +674,7 @@ class StorageHandler:
             expression = self.replace_variables(expression)
             return eval(expression) # pylint: disable=eval-used
         except Exception as e: # pylint: disable=broad-except
-            self.logger.info("- Value %s could not be evaluated. Probably a string: %s", \
+            self.logger.error("- Value %s could not be evaluated. Probably a string: %s", \
                 expression, e)
             return expression
 
@@ -687,33 +691,33 @@ class StorageHandler:
         try:
             # Make the expression a string
             expression = str(expression)
-            self.logger.info("- Evaluating expression: %s", expression)
+            self.logger.debug("- Evaluating expression: %s", expression)
             pattern = r'\{([^}]*)\}'
             matches = re.findall(pattern, expression)
             for match in matches:
                 variable_value = self.handle_variable_string(match)
                 if variable_value is not None:
-                    self.logger.info("- Variable value is %s", variable_value)
+                    self.logger.debug("- Variable value is %s", variable_value)
                     if isinstance(variable_value, str):
                         variable_value = f'"{variable_value}"'
                     expression = expression.replace("{" + match + "}", str(variable_value))
 
             expression = expression.replace("\"\"", "\"")
-            self.logger.info("- Replaced expression: %s", expression)
+            self.logger.debug("- Replaced expression: %s", expression)
 
             # Handle evaluations
             pattern = r"\|(.*?)\|"
             matches = re.findall(pattern, expression)
             for match in matches:
-                self.logger.info("Handling this evaluation: %s", match)
+                self.logger.debug("Handling this evaluation: %s", match)
                 variable_value = eval(match) # pylint: disable=eval-used
                 if variable_value is not None:
                     expression = expression.replace("|" + match + "|", str(variable_value))
-            self.logger.info("- Evaluated expression: %s", expression)
+            self.logger.debug("- Evaluated expression: %s", expression)
 
             return expression
         except Exception as e: # pylint: disable=broad-except
-            self.logger.error("- Error during evaluation: %s", e)
+            self.logger.debug("- Error during evaluation: %s", e)
             return None
 
     def stop(self):

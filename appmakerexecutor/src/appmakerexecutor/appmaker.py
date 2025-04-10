@@ -19,6 +19,7 @@ from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=
 import config as CONFIG # type: ignore # pylint: disable=import-error
 
 
+logging.basicConfig(format="%(asctime)s - %(message)s")
 if CONFIG.ZERO_LOGS: logging.disable()
 else: logging.getLogger().setLevel(CONFIG.LOG_LEVEL)
 
@@ -85,7 +86,7 @@ class AppMaker:
                 self.logger.warning("There is a process running, ignoring message")
                 return
 
-            self.logger.info("Received model")
+            self.logger.critical("Received model for execution")
             self.logger.info("Feedback on: %s", message['feedbackTopic'])
 
             self.current_process = multiprocessing.Process(
@@ -95,7 +96,7 @@ class AppMaker:
             self.current_process.start()
             self.current_process.join()
             self.current_process = None
-            self.logger.info("All done")
+            self.logger.critical(f"Execution with id={self.execution_uid} finished")
         except Exception as e: # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
