@@ -15,13 +15,15 @@ from commlib.node import Node as CommlibNode
 from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
 
-from appmaker_executor import AppMakerExecutor # type: ignore # pylint: disable=import-error
-import config as CONFIG # type: ignore # pylint: disable=import-error
+from appmaker_executor import AppMakerExecutor  # type: ignore # pylint: disable=import-error
+import config as CONFIG  # type: ignore # pylint: disable=import-error
 
 
 logging.basicConfig(format="%(asctime)s - %(message)s")
-if CONFIG.ZERO_LOGS: logging.disable()
-else: logging.getLogger().setLevel(CONFIG.LOG_LEVEL)
+if CONFIG.ZERO_LOGS:
+    logging.disable()
+else:
+    logging.getLogger().setLevel(CONFIG.LOG_LEVEL)
 
 
 def start_executor(uid, feedback_topic, conn_params, message):
@@ -37,7 +39,7 @@ def start_executor(uid, feedback_topic, conn_params, message):
     Returns:
         None
     """
-    amexe = AppMakerExecutor( # pylint: disable=not-callable
+    amexe = AppMakerExecutor(  # pylint: disable=not-callable
         uid=uid,
         feedback_topic=feedback_topic,
         conn_params=conn_params,
@@ -50,6 +52,7 @@ class AppMaker:
     """
     A class that initializes an AppMakerExecutor.
     """
+
     def __init__(self, uid):
         self.uid = uid
         self.commlib_node = None
@@ -80,24 +83,25 @@ class AppMaker:
             None
         """
         try:
-            self.execution_uid = \
-                ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
+            self.execution_uid = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=16)
+            )
             if self.current_process is not None and self.current_process.is_alive():
                 self.logger.warning("There is a process running, ignoring message")
                 return
 
             self.logger.critical("Received model for execution")
-            self.logger.info("Feedback on: %s", message['feedbackTopic'])
+            self.logger.info("Feedback on: %s", message["feedbackTopic"])
 
             self.current_process = multiprocessing.Process(
                 target=start_executor,
-                args=(self.uid, message['feedbackTopic'], self.conn_params, message)
+                args=(self.uid, message["feedbackTopic"], self.conn_params, message),
             )
             self.current_process.start()
             self.current_process.join()
             self.current_process = None
             self.logger.critical("Execution with id=%s finished", self.execution_uid)
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
     def on_internal_score(self, message):
@@ -107,15 +111,17 @@ class AppMaker:
         Args:
             message (Any): The message containing the score information to be published.
         """
-        message['execution_uid'] = self.execution_uid
+        message["execution_uid"] = self.execution_uid
         self.scores_publisher.publish(message)
 
-        self.goaldsl_scores_publisher.publish({
-          'type': 'goaldsl_update',
-          'data': message,
-        })
+        self.goaldsl_scores_publisher.publish(
+            {
+                "type": "goaldsl_update",
+                "data": message,
+            }
+        )
 
-    def on_message_stop(self, message): # pylint: disable=unused-argument
+    def on_message_stop(self, message):  # pylint: disable=unused-argument
         """
         Handles the 'stop' message to terminate the current running process.
 
@@ -143,7 +149,7 @@ class AppMaker:
             self.logger.critical("Stopping goal DSL")
             self.goaldsl_reset_rpc_client.call({}, timeout=3)
             self.logger.critical("Goal DSL stopped")
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
     def run(self):
@@ -155,12 +161,14 @@ class AppMaker:
         """
         try:
             load_dotenv()
-            broker_host = os.getenv('BROKER_HOST', 'broker.emqx.io')
-            broker_port = int(os.getenv('BROKER_PORT', "8883"))
-            broker_ssl = True if os.getenv('BROKER_SSL', "True").lower() == "true" else False
-            broker_username = os.getenv('BROKER_USERNAME', '')
-            broker_password = os.getenv('BROKER_PASSWORD', '')
-        except Exception as e: # pylint: disable=broad-except
+            broker_host = os.getenv("BROKER_HOST", "broker.emqx.io")
+            broker_port = int(os.getenv("BROKER_PORT", "8883"))
+            broker_ssl = (
+                True if os.getenv("BROKER_SSL", "True").lower() == "true" else False
+            )
+            broker_username = os.getenv("BROKER_USERNAME", "")
+            broker_password = os.getenv("BROKER_PASSWORD", "")
+        except Exception as e:  # pylint: disable=broad-except
             print("Error: ", e)
             exit(1)
 
@@ -175,49 +183,49 @@ class AppMaker:
             tls_insecure=True,
         )
 
-        self.commlib_node = CommlibNode(node_name=f'locsys.app_executor_node.{self.uid}',
+        self.commlib_node = CommlibNode(
+            node_name=f"locsys.app_executor_node.{self.uid}",
             connection_params=self.conn_params,
             heartbeats=True,
-            debug=True)
+            debug=True,
+        )
         print("Connected to broker")
 
         self.commlib_node.create_subscriber(
-            topic=f'appcreator.{self.uid}.deploy',
-            on_message=self.on_message
+            topic=f"appcreator.{self.uid}.deploy", on_message=self.on_message
         )
-        self.logger.info("Subscribed to %s", f'appcreator.{self.uid}.deploy')
+        self.logger.info("Subscribed to %s", f"appcreator.{self.uid}.deploy")
 
         self.commlib_node.create_subscriber(
-            topic=f'appcreator.{self.uid}.stop',
-            on_message=self.on_message_stop
+            topic=f"appcreator.{self.uid}.stop", on_message=self.on_message_stop
         )
-        self.logger.info("Subscribed to %s", f'appcreator.{self.uid}.stop')
+        self.logger.info("Subscribed to %s", f"appcreator.{self.uid}.stop")
 
         self.scores_publisher = self.commlib_node.create_publisher(
-            topic='appcreator.scores',
+            topic="appcreator.scores",
         )
-
         self.goaldsl_scores_publisher = self.commlib_node.create_publisher(
-            topic=f'streamsim.{self.uid}.notify',
+            topic=f"streamsim.{self.uid}.notify",
         )
 
         self.commlib_node.run()
 
         # ---------- Redis interfaces ----------
-        self.local_commlib_node = CommlibNode(node_name='locsys.app_executor_node_local',
+        self.local_commlib_node = CommlibNode(
+            node_name="locsys.app_executor_node_local",
             connection_params=RedisConnectionParameters(
                 host=CONFIG.REDIS_HOST,
                 port=CONFIG.REDIS_PORT,
                 username=CONFIG.REDIS_USERNAME,
                 password=CONFIG.REDIS_PASSWORD,
-                db=CONFIG.REDIS_DB
+                db=CONFIG.REDIS_DB,
             ),
             heartbeats=False,
-            debug=True)
+            debug=True,
+        )
 
         self.local_commlib_node.create_subscriber(
-            topic='appcreator.local.stop',
-            on_message=self.on_message_stop
+            topic="appcreator.local.stop", on_message=self.on_message_stop
         )
 
         self.streamsim_reset_rpc_client = self.local_commlib_node.create_rpc_client(
@@ -229,8 +237,7 @@ class AppMaker:
         )
 
         self.local_commlib_node.create_subscriber(
-            topic='appcreator.scores.internal',
-            on_message=self.on_internal_score
+            topic="appcreator.scores.internal", on_message=self.on_internal_score
         )
 
         self.local_commlib_node.run()
@@ -248,7 +255,8 @@ if __name__ == "__main__":
     try:
         while True:
             time.sleep(0.1)
-            if not appmaker.commlib_node.health:
+            # if not appmaker.commlib_node.health:
+            if not appmaker.commlib_node.state.name == "RUNNING":
                 try:
                     print("Connection lost, restarting nodes")
                     appmaker.commlib_node.stop()
@@ -256,13 +264,13 @@ if __name__ == "__main__":
                     appmaker.local_commlib_node.stop()
                     del appmaker.local_commlib_node
                     time.sleep(1)
-                except Exception as e: # pylint: disable=broad-except
+                except Exception as e:  # pylint: disable=broad-except
                     print("Error stopping nodes", e)
                 appmaker.run()
     except KeyboardInterrupt:
         try:
             appmaker.commlib_node.stop()
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             print("Error: ", e)
         print("Bye!")
         exit(0)

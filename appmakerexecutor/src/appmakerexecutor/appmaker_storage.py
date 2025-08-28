@@ -7,16 +7,16 @@ import time
 import logging
 import copy
 import json
-import math # pylint: disable=unused-import
-import string # pylint: disable=unused-import
-import random # pylint: disable=unused-import
-import statistics # pylint: disable=unused-import
-import numpy as np # pylint: disable=unused-import
+import math  # pylint: disable=unused-import
+import string  # pylint: disable=unused-import
+import random  # pylint: disable=unused-import
+import statistics  # pylint: disable=unused-import
+import numpy as np  # pylint: disable=unused-import
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
 
-import config as CONFIG # type: ignore # pylint: disable=import-error
+import config as CONFIG  # type: ignore # pylint: disable=import-error
 
 
 class StorageHandler:
@@ -58,6 +58,7 @@ class StorageHandler:
         stop():
             Stops the storage handler.
     """
+
     def __init__(self, uid, model, stop_publisher):
         self.storage = {}
         self.subscribers = {}
@@ -72,7 +73,28 @@ class StorageHandler:
         self.stop_publisher = stop_publisher
         self._logger = logging.getLogger(__name__)
 
-        self.commlib_node = CommlibNode(node_name="storage_commlib_node",
+        # Collect all nodes that will be using brokers
+        action_nodes = []
+        toolboxes = self.model.get("toolboxes", [])
+        for toolbox in toolboxes:
+            for node in toolbox.get("nodes", {}):
+                if node.get("action"):
+                    action_nodes.append(node)
+
+        # Collect the info to create commlib nodes for each broker
+        commlib_nodes_info = []
+        for action_node in action_nodes:
+            if "broker" in action_node["action"]:
+                broker = action_node["action"]["broker"]
+                if broker not in commlib_nodes_info:
+                    commlib_nodes_info.append(broker)
+        print(commlib_nodes_info)
+
+        # for broker in commlib_nodes_info:
+        # create commlib nodes for each broker with the correct parameters
+
+        self.commlib_node = CommlibNode(
+            node_name="storage_commlib_node",
             connection_params=RedisConnectionParameters(
                 host=CONFIG.REDIS_HOST,
                 port=CONFIG.REDIS_PORT,
@@ -86,8 +108,7 @@ class StorageHandler:
         )
 
         self.goaldsl_subscriber = self.commlib_node.create_psubscriber(
-            topic="goaldsl.*.event",
-            on_message=self.handle_goaldsl_message
+            topic="goaldsl.*.event", on_message=self.handle_goaldsl_message
         )
 
         self.streamsim_start_rpc_client = self.commlib_node.create_rpc_client(
@@ -132,11 +153,11 @@ class StorageHandler:
         """
         Modifies the given topic by replacing the second segment with the instance's UID.
         Args:
-            topic (str): The topic string to be modified. It is expected to be in the 
+            topic (str): The topic string to be modified. It is expected to be in the
             format 'segment1.segment2.segment3...'.
 
         Returns:
-            str: The modified topic string with the second segment replaced by the 
+            str: The modified topic string with the second segment replaced by the
             instance's UID.
         """
         if "streamsim." in topic:
@@ -150,29 +171,28 @@ class StorageHandler:
         Identify subscribers and start them.
         """
         self.logger.info("Identifying subscribers and starting them")
-        nodes_str = json.dumps(self.model['nodes'])
-        for toolbox in self.model['toolboxes']:
-            for node in toolbox['nodes']:
-                if 'action' in node and node['action']['type'] == "subscribe":
-                    node['action']['topic'] = self.fix_topic(node['action']['topic'])
-                    topic = node['action']['topic']
-                    variable = node['action']['storage']
-                    if 'literalVariables' in node:
-                        for literal in node['literalVariables']:
+        nodes_str = json.dumps(self.model["nodes"])
+        for toolbox in self.model["toolboxes"]:
+            for node in toolbox["nodes"]:
+                if "action" in node and node["action"]["type"] == "subscribe":
+                    node["action"]["topic"] = self.fix_topic(node["action"]["topic"])
+                    topic = node["action"]["topic"]
+                    variable = node["action"]["storage"]
+                    if "literalVariables" in node:
+                        for literal in node["literalVariables"]:
                             if literal in nodes_str:
                                 # The variable is used, start the subscriber
                                 # Dynamically create a callback in the class
                                 topic = topic.replace(".", "_")
                                 # pylint: disable=unnecessary-lambda-assignment
-                                callback = lambda message, var=variable: self.set(var, message)
+                                callback = lambda message, var=variable: self.set(
+                                    var, message
+                                )
                                 self.start_subscriber(
-                                    node['action'],
-                                    None,
-                                    callback,
-                                    literal
+                                    node["action"], None, callback, literal
                                 )
 
-                                break # In case other literals are used, sub has started
+                                break  # In case other literals are used, sub has started
         # exit(0)
 
     def start_simulation(self, model):
@@ -214,9 +234,15 @@ class StorageHandler:
             None
         """
         self.logger.info("Starting goaldsl")
-        tmp = model[1:-1].replace("\\n", "\n").replace("\\t", "\t").\
-            replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\")
-        self.goaldsl_start_rpc.call({'model': tmp})
+        tmp = (
+            model[1:-1]
+            .replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .replace('\\"', '"')
+            .replace("\\'", "'")
+            .replace("\\\\", "\\")
+        )
+        self.goaldsl_start_rpc.call({"model": tmp})
         time.sleep(2)
 
     def stop_goaldsl(self):
@@ -244,23 +270,30 @@ class StorageHandler:
             None
         """
         self.logger.info("Received message on goaldsl topic: %s", message)
-        if "type" in message and message["type"] in \
-                ["scenario_update", "scenario_started", "scenario_finished"]:
+        if "type" in message and message["type"] in [
+            "scenario_update",
+            "scenario_started",
+            "scenario_finished",
+        ]:
             if self.publisher is not None:
-                self.publisher.publish({
-                    "node_id": None,
-                    "message": message,
-                    "label": "Score",
-                    "timestamp": time.time(),
-                })
+                self.publisher.publish(
+                    {
+                        "node_id": None,
+                        "message": message,
+                        "label": "Score",
+                        "timestamp": time.time(),
+                    }
+                )
 
                 message["data"]["operations"] = self.operations
                 # self.logger.info("Publishing scores: %s", message)
-                self.scores_publisher.publish({
-                    "user_id": self.uid,
-                    "goaldsl_id": self.goaldsl_id,
-                    "update": message
-                })
+                self.scores_publisher.publish(
+                    {
+                        "user_id": self.uid,
+                        "goaldsl_id": self.goaldsl_id,
+                        "update": message,
+                    }
+                )
 
             if message["type"] == "scenario_finished":
                 # check for fatals
@@ -271,22 +304,26 @@ class StorageHandler:
                             self.logger.critical("Fatal goal completed")
                             if self.stop_publisher is not None:
                                 # Inform UI for stop
-                                self.publisher.publish({
-                                    "node_id": None,
-                                    "message": "runtime_error: Fatal goal triggered!",
-                                    "label": None,
-                                    "timestamp": time.time(),
-                                })
+                                self.publisher.publish(
+                                    {
+                                        "node_id": None,
+                                        "message": "runtime_error: Fatal goal triggered!",
+                                        "label": None,
+                                        "timestamp": time.time(),
+                                    }
+                                )
                                 self.logger.debug("Sent end to UI")
                                 time.sleep(1)
-                                self.stop_publisher.publish({
-                                    "node_id": None,
-                                    "message": "Fatal goal triggered!",
-                                    "label": "Fatal",
-                                })
+                                self.stop_publisher.publish(
+                                    {
+                                        "node_id": None,
+                                        "message": "Fatal goal triggered!",
+                                        "label": "Fatal",
+                                    }
+                                )
                                 time.sleep(1)
 
-    def start_subscriber(self, action, broker, callback, literal = None):
+    def start_subscriber(self, action, broker, callback, literal=None):
         """
         Starts a subscriber for a given action and broker.
 
@@ -307,24 +344,25 @@ class StorageHandler:
             None
         """
         # Check if topic with the specific broker is already subscribed
-        _topic = self.fix_topic(action['topic'])
-        if _topic in self.subscribers and \
-            self.subscribers[_topic]['broker']['parameters']['host'] \
-                == broker['parameters']['host']:
+        _topic = self.fix_topic(action["topic"])
+        if (
+            _topic in self.subscribers
+            and self.subscribers[_topic]["broker"]["parameters"]["host"]
+            == broker["parameters"]["host"]
+        ):
 
             self.logger.warning("Subscriber already exists for action: %s", _topic)
             return
 
         self.logger.debug("Creating subscriber for action: %s : %s", _topic, literal)
         _subscriber = self.commlib_node.create_subscriber(
-            topic=_topic,
-            on_message=callback
+            topic=_topic, on_message=callback
         )
 
         self.subscribers[_topic] = {
             "subscriber": _subscriber,
             "broker": broker,
-            "literal": literal
+            "literal": literal,
         }
 
         _subscriber.run()
@@ -336,19 +374,21 @@ class StorageHandler:
 
         Args:
             action (dict): A dictionary containing the action details, including the 'topic'.
-            broker (dict): A dictionary containing the broker details, including 'parameters' and 
+            broker (dict): A dictionary containing the broker details, including 'parameters' and
                 'host'.
 
         Logs:
             Info: Logs a message indicating that the subscriber was stopped for the given action.
             Error: Logs an error message if no active subscriber is found for the given action.
         """
-        _topic = self.fix_topic(action['topic'])
-        if _topic in self.subscribers and \
-            self.subscribers[_topic]['broker']['parameters']['host'] \
-                == broker['parameters']['host']:
+        _topic = self.fix_topic(action["topic"])
+        if (
+            _topic in self.subscribers
+            and self.subscribers[_topic]["broker"]["parameters"]["host"]
+            == broker["parameters"]["host"]
+        ):
 
-            self.subscribers[_topic]['subscriber'].stop()
+            self.subscribers[_topic]["subscriber"].stop()
             del self.subscribers[_topic]
             self.logger.debug("Subscriber stopped for action: %s", _topic)
         else:
@@ -359,11 +399,11 @@ class StorageHandler:
         Publishes an action to a specified topic using a publisher.
 
         If a publisher for the given action topic does not exist, it creates one and stores it.
-        Then, it deep copies the initial payload, iterates through it to replace 
+        Then, it deep copies the initial payload, iterates through it to replace
         variables with the provided parameters, and publishes the modified payload.
 
         Args:
-            action (dict): A dictionary containing the action details, including the 
+            action (dict): A dictionary containing the action details, including the
             'topic' and 'payload'.
             broker (str): The broker information associated with the publisher.
             parameters (dict): A dictionary of parameters to replace variables in the payload.
@@ -371,44 +411,42 @@ class StorageHandler:
         Returns:
             None
         """
-        _topic = self.fix_topic(action['topic'])
+        _topic = self.fix_topic(action["topic"])
         if _topic not in self.publishers:
             # Add it
             self.logger.debug("Creating publisher for action: %s", _topic)
             _topic = self.fix_topic(_topic)
-            _publisher = self.commlib_node.create_publisher(
-                topic=_topic
-            )
+            _publisher = self.commlib_node.create_publisher(topic=_topic)
             _publisher.run()
 
             self.publishers[_topic] = {
                 "publisher": _publisher,
                 "broker": broker,
-                "initial_payload": action['payload']
+                "initial_payload": action["payload"],
             }
 
         self.logger.debug("Publishing the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.publishers[_topic]['initial_payload'])
+        payload = copy.deepcopy(self.publishers[_topic]["initial_payload"])
         self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
-        self.publishers[_topic]['publisher'].publish(payload)
+        self.publishers[_topic]["publisher"].publish(payload)
 
     def action_rpc_call(self, action, broker, parameters):
         """
         Handles the RPC call for a given action.
 
-        This method creates an RPC client if one does not already exist for the given action's 
+        This method creates an RPC client if one does not already exist for the given action's
         topic.
-        It then prepares the payload, iterates through it to replace variables with the provided 
+        It then prepares the payload, iterates through it to replace variables with the provided
         parameters,
         and makes the RPC call with the prepared payload.
 
         Args:
-            action (dict): A dictionary containing the action details, including 'topic' and 
+            action (dict): A dictionary containing the action details, including 'topic' and
                 'payload'.
             broker (str): The broker information associated with the action.
             parameters (dict): A dictionary of parameters to replace variables in the payload.
@@ -422,7 +460,7 @@ class StorageHandler:
             - The iterated payload after replacing variables.
             - The response from the RPC call.
         """
-        _topic = self.fix_topic(action['topic'])
+        _topic = self.fix_topic(action["topic"])
         if _topic not in self.rpc_clients:
             _rpc_call = self.commlib_node.create_rpc_client(
                 rpc_name=_topic,
@@ -433,18 +471,18 @@ class StorageHandler:
             self.rpc_clients[_topic] = {
                 "rpc": _rpc_call,
                 "broker": broker,
-                "initial_payload": action['payload']
+                "initial_payload": action["payload"],
             }
 
         self.logger.debug("RPC calling the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.rpc_clients[_topic]['initial_payload'])
+        payload = copy.deepcopy(self.rpc_clients[_topic]["initial_payload"])
         self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
-        response = self.rpc_clients[_topic]['rpc'].call(
+        response = self.rpc_clients[_topic]["rpc"].call(
             payload,
             timeout=120,
         )
@@ -456,23 +494,23 @@ class StorageHandler:
         Handles the execution of an action call.
 
         This method checks if an action client for the given action topic exists.
-        If not, it creates a new action client, runs it, and stores it in the action_clients 
+        If not, it creates a new action client, runs it, and stores it in the action_clients
         dictionary.
-        It then prepares the payload by deep copying the initial payload and iterating through it 
+        It then prepares the payload by deep copying the initial payload and iterating through it
         to replace variables.
         Finally, it sends the goal to the action client and waits for the result.
 
         Args:
-            action (dict): A dictionary containing the action details, including the 'topic' and 
+            action (dict): A dictionary containing the action details, including the 'topic' and
             'payload'.
             broker (object): The broker object associated with the action.
-            parameters (dict): A dictionary of parameters to be used for replacing variables in 
+            parameters (dict): A dictionary of parameters to be used for replacing variables in
             the payload.
 
         Returns:
             object: The result of the action call.
         """
-        _topic = self.fix_topic(action['topic'])
+        _topic = self.fix_topic(action["topic"])
         if _topic not in self.action_clients:
             _action_call = self.commlib_node.create_action_client(
                 action_name=_topic,
@@ -483,23 +521,22 @@ class StorageHandler:
             self.action_clients[_topic] = {
                 "action": _action_call,
                 "broker": broker,
-                "initial_payload": action['payload']
+                "initial_payload": action["payload"],
             }
 
         self.logger.debug("Action calling the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.action_clients[_topic]['initial_payload'])
+        payload = copy.deepcopy(self.action_clients[_topic]["initial_payload"])
         self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
-        self.action_clients[_topic]['action'].send_goal(
-            payload
-        )
+        self.action_clients[_topic]["action"].send_goal(payload)
         self.logger.debug("Action called")
-        response = self.action_clients[_topic]['action'].get_result(wait=True, \
-            timeout=120, wait_max_sec=120)
+        response = self.action_clients[_topic]["action"].get_result(
+            wait=True, timeout=120, wait_max_sec=120
+        )
         return response
 
     def iterate_payload(self, payload, parameters):
@@ -509,7 +546,7 @@ class StorageHandler:
 
         Args:
             payload (dict): The dictionary containing the payload data with placeholders.
-            parameters (list): A list of dictionaries, each containing 'id' and 'value' keys, used 
+            parameters (list): A list of dictionaries, each containing 'id' and 'value' keys, used
                 to replace placeholders in the payload.
 
         Returns:
@@ -539,23 +576,25 @@ class StorageHandler:
             # }
         """
         for key, value in payload.items():
-            if isinstance(value, dict): # or list
+            if isinstance(value, dict):  # or list
                 payload = self.iterate_payload(value, parameters)
             else:
                 # Search for variables in the parameters
-                pattern = r'\{([^}]*)\}'
+                pattern = r"\{([^}]*)\}"
                 self.logger.debug("\tPattern: %s", pattern)
                 self.logger.debug("\tValue: %s", value)
                 matches = re.findall(pattern, str(value))
                 self.logger.debug("\tMatches: %s", matches)
                 for match in matches:
                     for p in parameters:
-                        if p['id'] == match:
+                        if p["id"] == match:
                             self.logger.debug("\tMatch found: %s", match)
-                            value = value.replace("{" + match + "}", str(p['value']))
+                            value = value.replace("{" + match + "}", str(p["value"]))
                             self.logger.debug("\tValue replaced: %s", value)
                             payload[key] = self.evaluate(value)
-                            if payload[key] is None: # Evaluation failed, not a numeric value
+                            if (
+                                payload[key] is None
+                            ):  # Evaluation failed, not a numeric value
                                 payload[key] = str(value)
                             self.logger.debug("\tPayload: %s", payload)
         return payload
@@ -597,17 +636,14 @@ class StorageHandler:
         """
         self.storage[key] = value
         if self.publisher is not None:
-            self.publisher.publish({
-                "type": "storage",
-                "action": "set",
-                "key": key,
-                "value": value
-            })
+            self.publisher.publish(
+                {"type": "storage", "action": "set", "key": key, "value": value}
+            )
 
         variables_publish_payload = {
             "name": key,
             "value": value,
-            "type": type(value).__name__
+            "type": type(value).__name__,
         }
         self.variables_publisher.publish(variables_publish_payload)
         self.logger.debug("Published: %s", variables_publish_payload)
@@ -638,7 +674,7 @@ class StorageHandler:
         Returns:
             True if the items in the expression can be evaluated, False otherwise.
         """
-        value = {} # To suppress the warning
+        value = {}  # To suppress the warning
         try:
             self.logger.debug("Handling this variable: %s", expression)
             items = expression.split(".")
@@ -655,14 +691,14 @@ class StorageHandler:
                 else:
                     try:
                         item = int(item)
-                    except: # pylint: disable=bare-except
+                    except:  # pylint: disable=bare-except
                         pass
                     value = value[item]
                     # check if it is number, else put it on quotes
                     if not isinstance(value, (int, float, list, dict)):
                         value = f'"{value}"'
                         value = value.replace('""', '"')
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.logger.error("Error during evaluation: %s", e)
 
         return value
@@ -679,11 +715,14 @@ class StorageHandler:
         """
         try:
             expression = self.replace_variables(expression)
-            return eval(expression) # pylint: disable=eval-used
-        except Exception as e: # pylint: disable=broad-except
+            return eval(expression)  # pylint: disable=eval-used
+        except Exception as e:  # pylint: disable=broad-except
             if "Go to last output" not in expression:
-                self.logger.error("- Value %s could not be evaluated. Probably a string: %s", \
-                expression, e)
+                self.logger.error(
+                    "- Value %s could not be evaluated. Probably a string: %s",
+                    expression,
+                    e,
+                )
             return expression
 
     def replace_variables(self, expression):
@@ -700,7 +739,7 @@ class StorageHandler:
             # Make the expression a string
             expression = str(expression)
             self.logger.debug("- Evaluating expression: %s", expression)
-            pattern = r'\{([^}]*)\}'
+            pattern = r"\{([^}]*)\}"
             matches = re.findall(pattern, expression)
             for match in matches:
                 variable_value = self.handle_variable_string(match)
@@ -708,9 +747,11 @@ class StorageHandler:
                     self.logger.debug("- Variable value is %s", variable_value)
                     if isinstance(variable_value, str):
                         variable_value = f'"{variable_value}"'
-                    expression = expression.replace("{" + match + "}", str(variable_value))
+                    expression = expression.replace(
+                        "{" + match + "}", str(variable_value)
+                    )
 
-            expression = expression.replace("\"\"", "\"")
+            expression = expression.replace('""', '"')
             self.logger.debug("- Replaced expression: %s", expression)
 
             # Handle evaluations
@@ -718,13 +759,15 @@ class StorageHandler:
             matches = re.findall(pattern, expression)
             for match in matches:
                 self.logger.debug("Handling this evaluation: %s", match)
-                variable_value = eval(match) # pylint: disable=eval-used
+                variable_value = eval(match)  # pylint: disable=eval-used
                 if variable_value is not None:
-                    expression = expression.replace("|" + match + "|", str(variable_value))
+                    expression = expression.replace(
+                        "|" + match + "|", str(variable_value)
+                    )
             self.logger.debug("- Evaluated expression: %s", expression)
 
             return expression
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.logger.debug("- Error during evaluation: %s", e)
             return None
 
@@ -741,7 +784,7 @@ class StorageHandler:
         try:
             self.logger.info("Stopping commlib node")
             self.commlib_node.stop()
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             self.logger.error("Error stopping subscribers")
 
         self.subscribers = {}
