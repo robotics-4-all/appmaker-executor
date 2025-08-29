@@ -15,6 +15,9 @@ import numpy as np  # pylint: disable=unused-import
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
+from commlib.transports.amqp import ConnectionParameters as AMQPConnectionParameters
+from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
+
 
 import config as CONFIG  # type: ignore # pylint: disable=import-error
 
@@ -72,26 +75,68 @@ class StorageHandler:
         self.operations = 0
         self.stop_publisher = stop_publisher
         self._logger = logging.getLogger(__name__)
+        self.commlib_nodes = {}  # to store commlib nodes for each broker
 
-        # Collect all nodes that will be using brokers
-        action_nodes = []
+        # Collect all nodes that contain actions
+        self.action_nodes = []
         toolboxes = self.model.get("toolboxes", [])
         for toolbox in toolboxes:
             for node in toolbox.get("nodes", {}):
                 if node.get("action"):
-                    action_nodes.append(node)
+                    self.action_nodes.append(node)
 
         # Collect the info to create commlib nodes for each broker
         commlib_nodes_info = []
-        for action_node in action_nodes:
+        for action_node in self.action_nodes:
             if "broker" in action_node["action"]:
                 broker = action_node["action"]["broker"]
                 if broker not in commlib_nodes_info:
                     commlib_nodes_info.append(broker)
-        print(commlib_nodes_info)
 
-        # for broker in commlib_nodes_info:
         # create commlib nodes for each broker with the correct parameters
+        for broker in commlib_nodes_info:
+            broker_type = broker.get("type")
+            if broker_type == "redis":
+                self.commlib_nodes[broker["name"]] = CommlibNode(
+                    node_name=f"storage_commlib_node_{broker['name']}",
+                    connection_params=RedisConnectionParameters(
+                        host=broker.get("parameters", {}).get("host"),
+                        port=broker.get("parameters", {}).get("port"),
+                        username=broker.get("parameters", {}).get("username"),
+                        password=broker.get("parameters", {}).get("password"),
+                        db=broker.get("parameters", {}).get("db"),
+                        socket_timeout=60,
+                    ),
+                    heartbeats=False,
+                    debug=True,
+                )
+            elif broker_type == "mqtt":
+                self.commlib_nodes[broker["name"]] = CommlibNode(
+                    node_name=f"storage_commlib_node_{broker['name']}",
+                    connection_params=MQTTConnectionParameters(
+                        host=broker.get("parameters", {}).get("host"),
+                        port=broker.get("parameters", {}).get("port"),
+                        username=broker.get("parameters", {}).get("username"),
+                        password=broker.get("parameters", {}).get("password"),
+                        transport=broker.get("parameters", {}).get("transport"),
+                        keepalive=60,
+                    ),
+                    heartbeats=False,
+                    debug=True,
+                )
+            elif broker_type == "amqp":
+                self.commlib_nodes[broker["name"]] = CommlibNode(
+                    node_name=f"storage_commlib_node_{broker['name']}",
+                    connection_params=AMQPConnectionParameters(
+                        host=broker.get("parameters", {}).get("host"),
+                        port=broker.get("parameters", {}).get("port"),
+                        username=broker.get("parameters", {}).get("username"),
+                        password=broker.get("parameters", {}).get("password"),
+                        vhost=broker.get("parameters", {}).get("vhost"),
+                    ),
+                    heartbeats=False,
+                    debug=True,
+                )
 
         self.commlib_node = CommlibNode(
             node_name="storage_commlib_node",
@@ -136,7 +181,6 @@ class StorageHandler:
         )
 
         self.identify_subscribers_and_start_them()
-
         self.commlib_node.run()
 
     @property
@@ -172,28 +216,31 @@ class StorageHandler:
         """
         self.logger.info("Identifying subscribers and starting them")
         nodes_str = json.dumps(self.model["nodes"])
-        for toolbox in self.model["toolboxes"]:
-            for node in toolbox["nodes"]:
-                if "action" in node and node["action"]["type"] == "subscribe":
-                    node["action"]["topic"] = self.fix_topic(node["action"]["topic"])
-                    topic = node["action"]["topic"]
-                    variable = node["action"]["storage"]
-                    if "literalVariables" in node:
-                        for literal in node["literalVariables"]:
-                            if literal in nodes_str:
-                                # The variable is used, start the subscriber
-                                # Dynamically create a callback in the class
-                                topic = topic.replace(".", "_")
-                                # pylint: disable=unnecessary-lambda-assignment
-                                callback = lambda message, var=variable: self.set(
-                                    var, message
-                                )
-                                self.start_subscriber(
-                                    node["action"], None, callback, literal
-                                )
+        for node in self.action_nodes:
+            if "action" in node and node["action"]["type"] == "subscribe":
+                node["action"]["topic"] = self.fix_topic(node["action"]["topic"])
+                topic = node["action"]["topic"]
+                variable = node["action"]["storage"]
+                if "literalVariables" in node:
+                    for literal in node["literalVariables"]:
+                        if literal in nodes_str:
+                            # The variable is used, start the subscriber
+                            # Dynamically create a callback in the class
+                            topic = topic.replace(".", "_")
+                            # pylint: disable=unnecessary-lambda-assignment
+                            callback = lambda message, var=variable: self.set(
+                                var, message[literal]
+                            )
+                            self.start_subscriber(
+                                node["action"],
+                                node["action"]["broker"],
+                                callback,
+                                literal,
+                            )
 
-                                break  # In case other literals are used, sub has started
-        # exit(0)
+                            break  # In case other literals are used, sub has started
+
+    # exit(0)
 
     def start_simulation(self, model):
         """
@@ -355,7 +402,7 @@ class StorageHandler:
             return
 
         self.logger.debug("Creating subscriber for action: %s : %s", _topic, literal)
-        _subscriber = self.commlib_node.create_subscriber(
+        _subscriber = self.commlib_nodes.get(broker["name"]).create_subscriber(
             topic=_topic, on_message=callback
         )
 
@@ -405,23 +452,27 @@ class StorageHandler:
         Args:
             action (dict): A dictionary containing the action details, including the
             'topic' and 'payload'.
-            broker (str): The broker information associated with the publisher.
+            broker (dict): The broker information associated with the publisher.
             parameters (dict): A dictionary of parameters to replace variables in the payload.
 
         Returns:
             None
         """
         _topic = self.fix_topic(action["topic"])
+        _broker = action["broker"]
+        print("I RUNNNNNNN PUBLISHHHHHHHHH")
         if _topic not in self.publishers:
             # Add it
             self.logger.debug("Creating publisher for action: %s", _topic)
             _topic = self.fix_topic(_topic)
-            _publisher = self.commlib_node.create_publisher(topic=_topic)
+            _publisher = self.commlib_nodes[_broker["name"]].create_publisher(
+                topic=_topic
+            )
             _publisher.run()
 
             self.publishers[_topic] = {
                 "publisher": _publisher,
-                "broker": broker,
+                "broker": _broker,
                 "initial_payload": action["payload"],
             }
 
@@ -448,7 +499,7 @@ class StorageHandler:
         Args:
             action (dict): A dictionary containing the action details, including 'topic' and
                 'payload'.
-            broker (str): The broker information associated with the action.
+            broker (dict): The broker information associated with the action.
             parameters (dict): A dictionary of parameters to replace variables in the payload.
 
         Returns:
@@ -461,8 +512,9 @@ class StorageHandler:
             - The response from the RPC call.
         """
         _topic = self.fix_topic(action["topic"])
+        _broker = action["broker"]
         if _topic not in self.rpc_clients:
-            _rpc_call = self.commlib_node.create_rpc_client(
+            _rpc_call = self.commlib_nodes[_broker["name"]].create_rpc_client(
                 rpc_name=_topic,
             )
             _rpc_call.run()
@@ -470,7 +522,7 @@ class StorageHandler:
 
             self.rpc_clients[_topic] = {
                 "rpc": _rpc_call,
-                "broker": broker,
+                "broker": _broker,
                 "initial_payload": action["payload"],
             }
 
@@ -503,7 +555,7 @@ class StorageHandler:
         Args:
             action (dict): A dictionary containing the action details, including the 'topic' and
             'payload'.
-            broker (object): The broker object associated with the action.
+            broker (dict): The broker object associated with the action.
             parameters (dict): A dictionary of parameters to be used for replacing variables in
             the payload.
 
@@ -511,8 +563,9 @@ class StorageHandler:
             object: The result of the action call.
         """
         _topic = self.fix_topic(action["topic"])
+        _broker = action["broker"]
         if _topic not in self.action_clients:
-            _action_call = self.commlib_node.create_action_client(
+            _action_call = self.commlib_nodes[broker["name"]].create_action_client(
                 action_name=_topic,
             )
             _action_call.run()
@@ -520,7 +573,7 @@ class StorageHandler:
 
             self.action_clients[_topic] = {
                 "action": _action_call,
-                "broker": broker,
+                "broker": _broker,
                 "initial_payload": action["payload"],
             }
 
@@ -782,7 +835,9 @@ class StorageHandler:
             None
         """
         try:
-            self.logger.info("Stopping commlib node")
+            self.logger.info("Stopping commlib nodes")
+            for node in self.commlib_nodes.values():
+                node.stop()
             self.commlib_node.stop()
         except:  # pylint: disable=bare-except
             self.logger.error("Error stopping subscribers")

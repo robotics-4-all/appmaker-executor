@@ -7,9 +7,10 @@ import time
 import random
 import json
 
+
 class AppMakerNode:
     """
-    Node class represents a node in a system that can execute various actions based on its label 
+    Node class represents a node in a system that can execute various actions based on its label
     and parameters.
     Attributes:
         data (dict): The data associated with the node.
@@ -45,20 +46,29 @@ class AppMakerNode:
         executeDelay(self):
         executeGeneral(self):
         printNode(self):
-            Prints information about the node, including its ID, label, count, parameters, 
+            Prints information about the node, including its ID, label, count, parameters,
             and connections.
     """
-    def __init__(self, data, publisher=None, storage_handler=None, brokers = None, \
-            stop_publisher=None):
+
+    def __init__(
+        self,
+        data,
+        publisher=None,
+        storage_handler=None,
+        brokers=None,
+        stop_publisher=None,
+    ):
         # print("\n\n", data)
         self.data = data
         self.publisher = publisher
         self.storage_handler = storage_handler
-        self.id = data['id']
-        self.label = data['data']['label']
-        self.toolbox = data['data']['toolbox']
-        self.count = data['data']['count']
-        self.parameters = data['data']['parameters'] if 'parameters' in data['data'] else []
+        self.id = data["id"]
+        self.label = data["data"]["label"]
+        self.toolbox = data["data"]["toolbox"]
+        self.count = data["data"]["count"]
+        self.parameters = (
+            data["data"]["parameters"] if "parameters" in data["data"] else []
+        )
         self.connections = {}
         self.connection_list = []
         self.brokers = brokers
@@ -105,12 +115,14 @@ class AppMakerNode:
         """
         self.logger.debug("Publishing message to UI %s", message)
         if self.publisher is not None:
-            self.publisher.publish({
-                "node_id": self.id,
-                "message": message,
-                "label": self.label,
-                "timestamp": time.time(),
-            })
+            self.publisher.publish(
+                {
+                    "node_id": self.id,
+                    "message": message,
+                    "label": self.label,
+                    "timestamp": time.time(),
+                }
+            )
 
     def publish_stop(self, message):
         """
@@ -124,11 +136,13 @@ class AppMakerNode:
         """
         self.logger.debug("!! Publishing stop message")
         if self.stop_publisher is not None:
-            self.stop_publisher.publish({
-                "node_id": self.id,
-                "message": message,
-                "label": self.label,
-            })
+            self.stop_publisher.publish(
+                {
+                    "node_id": self.id,
+                    "message": message,
+                    "label": self.label,
+                }
+            )
 
     def on_message(self, message):
         """
@@ -161,12 +175,14 @@ class AppMakerNode:
         """
         self.logger.error("An error occurred: %s", e)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
-        self.publish({
-            "message": f"runtime_error: {e}",
-            "node_count": self.count,
-            "timestamp": timestamp,
-        })
-        self.publish("end") # Inform the UI that the executor has finished
+        self.publish(
+            {
+                "message": f"runtime_error: {e}",
+                "node_count": self.count,
+                "timestamp": timestamp,
+            }
+        )
+        self.publish("end")  # Inform the UI that the executor has finished
         self.logger.debug("Published to UI")
         time.sleep(1)
         self.publish_stop(f"An error occurred: {e}")
@@ -195,7 +211,7 @@ class AppMakerNode:
         elif self.label == "Random integer":
             next_node = self.execute_random_integer()
         elif self.label == "End":
-            time.sleep(1) # Delay to catch the websocket messages in Locsys
+            time.sleep(1)  # Delay to catch the websocket messages in Locsys
             next_node = None
         elif self.label == "Thread split":
             next_node = self.execute_thread_split()
@@ -203,7 +219,11 @@ class AppMakerNode:
             next_node = self.execute_preempt()
         elif self.label == "Delay":
             next_node = self.execute_delay()
-        elif self.label == "Create variable" or self.label == "Set variable" or self.label == "Create List":
+        elif (
+            self.label == "Create variable"
+            or self.label == "Set variable"
+            or self.label == "Create List"
+        ):
             next_node = self.execute_set_variable()
         elif self.label == "Create variables":
             next_node = self.execute_set_variables()
@@ -221,17 +241,17 @@ class AppMakerNode:
             next_node = self.deploy_goaldsl()
         elif self.label == "Stop GoalDSL model":
             next_node = self.stop_goaldsl()
-        else: # All other nodes
+        else:  # All other nodes
             next_node = self.execute_general()
 
         # Handle actions
-        if 'action' in self.data['data']:
+        if "action" in self.data["data"]:
             broker_id = None
             operation = None
-            action = self.data['data']['action']
+            action = self.data["data"]["action"]
 
             # Subscriber
-            if action['type'] == 'subscribe':
+            if action["type"] == "subscribe":
                 # NOTE: Commenting out since we assume only redis here
                 # # Find the broker id:
                 # for p in self.data['data']['parameters']:
@@ -247,13 +267,13 @@ class AppMakerNode:
                 #         break
                 correct_broker = None
                 # Find the operation. Start or stop?
-                self.logger.debug(">> Parameters: %s", self.data['data']['parameters'])
-                for p in self.data['data']['parameters']:
-                    if p['id'] == 'operation':
-                        operation = p['value']
+                self.logger.debug(">> Parameters: %s", self.data["data"]["parameters"])
+                for p in self.data["data"]["parameters"]:
+                    if p["id"] == "operation":
+                        operation = p["value"]
                         break
 
-                self.action_variable = action['storage']
+                self.action_variable = action["storage"]
 
                 self.logger.debug("The correct broker is: %s", correct_broker)
                 if operation == "start":
@@ -263,20 +283,24 @@ class AppMakerNode:
                         correct_broker,
                         self.on_message,
                     )
-                    self.logger.debug(">> Subscribing to: %s", action['topic'])
+                    self.logger.debug(">> Subscribing to: %s", action["topic"])
                 elif operation == "stop":
                     self.storage_handler.stop_subscriber(
                         action,
                         correct_broker,
                     )
                 else:
-                    self.logger.error("Something went wrong with action: %s %s %s",
-                                      action, correct_broker, operation)
+                    self.logger.error(
+                        "Something went wrong with action: %s %s %s",
+                        action,
+                        correct_broker,
+                        operation,
+                    )
 
-            elif action['type'] == "publish":
-                for p in self.data['data']['parameters']:
-                    if p['id'] == 'broker':
-                        broker_id = p['value']
+            elif action["type"] == "publish":
+                for p in self.data["data"]["parameters"]:
+                    if p["id"] == "broker":
+                        broker_id = p["value"]
                         break
                 # Get broker
                 correct_broker = None
@@ -287,14 +311,14 @@ class AppMakerNode:
 
                 self.storage_handler.action_publish(
                     action,
-                    correct_broker,
-                    self.data['data']['parameters'],
+                    correct_broker,  # broker data lives in action, this is unused
+                    self.data["data"]["parameters"],
                 )
 
-            elif action['type'] == "rpc":
-                for p in self.data['data']['parameters']:
-                    if p['id'] == 'broker':
-                        broker_id = p['value']
+            elif action["type"] == "rpc":
+                for p in self.data["data"]["parameters"]:
+                    if p["id"] == "broker":
+                        broker_id = p["value"]
                         break
                 # Get broker
                 correct_broker = None
@@ -305,19 +329,19 @@ class AppMakerNode:
 
                 response = self.storage_handler.action_rpc_call(
                     action,
-                    correct_broker,
-                    self.data['data']['parameters'],
+                    correct_broker,  # broker data lives in action, this is unused
+                    self.data["data"]["parameters"],
                 )
 
-                if 'storage' in action:
-                    self.action_variable = action['storage']
+                if "storage" in action:
+                    self.action_variable = action["storage"]
                     if self.action_variable:
                         self.storage_handler.set(self.action_variable, response)
 
-            elif action['type'] == "action":
-                for p in self.data['data']['parameters']:
-                    if p['id'] == 'broker':
-                        broker_id = p['value']
+            elif action["type"] == "action":
+                for p in self.data["data"]["parameters"]:
+                    if p["id"] == "broker":
+                        broker_id = p["value"]
                         break
                 # Get broker
                 correct_broker = None
@@ -328,12 +352,12 @@ class AppMakerNode:
 
                 response = self.storage_handler.action_action_call(
                     action,
-                    correct_broker,
-                    self.data['data']['parameters'],
+                    correct_broker,  # broker data lives in action, this is unused
+                    self.data["data"]["parameters"],
                 )
 
-                if 'storage' in action:
-                    self.action_variable = action['storage']
+                if "storage" in action:
+                    self.action_variable = action["storage"]
                     if self.action_variable:
                         self.storage_handler.set(self.action_variable, response)
 
@@ -355,7 +379,7 @@ class AppMakerNode:
             int: The index in the connections list.
         """
         for i, c in enumerate(self.connection_list):
-            if c['sourceHandle'] == f"out_{ind}":
+            if c["sourceHandle"] == f"out_{ind}":
                 return i
         return -1
 
@@ -365,27 +389,29 @@ class AppMakerNode:
 
         This method performs the following actions:
         1. Logs the current parameters.
-        2. Retrieves the model from the parameters and initiates the simulation using the 
+        2. Retrieves the model from the parameters and initiates the simulation using the
             storage handler.
         3. Generates a timestamp of the current time.
-        4. Publishes a message indicating that the simulation has started, along with the 
+        4. Publishes a message indicating that the simulation has started, along with the
             timestamp and node count.
 
         Returns:
             None
         """
         self.logger.info("Starting simulation")
-        model = self.parameters[0]['value']
+        model = self.parameters[0]["value"]
         # Stop simulation before starting a new one
         self.storage_handler.reset_simulation()
         # Start the new one
         self.storage_handler.start_simulation(model)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
-        self.publish({
-            "message": "Simulation started", 
-            "timestamp": timestamp,
-            "node_count": self.count,
-        })
+        self.publish(
+            {
+                "message": "Simulation started",
+                "timestamp": timestamp,
+                "node_count": self.count,
+            }
+        )
         time.sleep(3)
         return list(self.connections.keys())[0]
 
@@ -395,10 +421,10 @@ class AppMakerNode:
 
         This method performs the following actions:
         1. Logs the current parameters.
-        2. Retrieves the model from the parameters and initiates the simulation using the 
+        2. Retrieves the model from the parameters and initiates the simulation using the
             storage handler.
         3. Generates a timestamp of the current time.
-        4. Publishes a message indicating that the simulation has started, along with the 
+        4. Publishes a message indicating that the simulation has started, along with the
             timestamp and node count.
 
         Returns:
@@ -408,11 +434,13 @@ class AppMakerNode:
         resp = self.storage_handler.reset_simulation()
         self.logger.info("Simulation stopped: %s", resp)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
-        self.publish({
-            "message": "Simulation stopped", 
-            "timestamp": timestamp,
-            "node_count": self.count,
-        })
+        self.publish(
+            {
+                "message": "Simulation stopped",
+                "timestamp": timestamp,
+                "node_count": self.count,
+            }
+        )
         time.sleep(3)
         return list(self.connections.keys())[0]
 
@@ -420,10 +448,10 @@ class AppMakerNode:
         """
         Deploys the goaldsl model.
 
-        This method starts the goaldsl model using the first parameter's value from the parameters 
+        This method starts the goaldsl model using the first parameter's value from the parameters
         list.
-        It then deploys the model using the storage handler, publishes a message indicating that the 
-        goaldsl model has started along with the current timestamp and node count, and finally 
+        It then deploys the model using the storage handler, publishes a message indicating that the
+        goaldsl model has started along with the current timestamp and node count, and finally
         returns the first connection key.
 
         Returns:
@@ -431,18 +459,20 @@ class AppMakerNode:
         """
 
         self.logger.info("Starting GoalDSL model...")
-        model = self.parameters[0]['value']
-        model_id = self.parameters[0]['model_id']
+        model = self.parameters[0]["value"]
+        model_id = self.parameters[0]["model_id"]
         self.storage_handler.goaldsl_id = model_id
         # Start the new one
         self.storage_handler.deploy_goaldsl(model)
         self.logger.info("Started GoalDSL model")
         timestamp = time.strftime("%H:%M:%S", time.localtime())
-        self.publish({
-            "message": "Goaldsl started",
-            "timestamp": timestamp,
-            "node_count": self.count,
-        })
+        self.publish(
+            {
+                "message": "Goaldsl started",
+                "timestamp": timestamp,
+                "node_count": self.count,
+            }
+        )
         time.sleep(1)
         return list(self.connections.keys())[0]
 
@@ -465,11 +495,13 @@ class AppMakerNode:
         resp = self.storage_handler.stop_goaldsl()
         self.logger.info("GoalDSL stopped: %s", resp)
         timestamp = time.strftime("%H:%M:%S", time.localtime())
-        self.publish({
-            "message": "Goaldsl stopped", 
-            "timestamp": timestamp,
-            "node_count": self.count,
-        })
+        self.publish(
+            {
+                "message": "Goaldsl stopped",
+                "timestamp": timestamp,
+                "node_count": self.count,
+            }
+        )
         time.sleep(3)
         return list(self.connections.keys())[0]
 
@@ -483,31 +515,33 @@ class AppMakerNode:
             str: The key of the first connection.
         """
         self.logger.debug("Log: %s", self.parameters)
-        message = self.parameters[0]['value']
+        message = self.parameters[0]["value"]
         message = self.storage_handler.replace_variables(message)
         self.logger.debug("Log: %s", message)
         # Get current time in literal format
         timestamp = time.strftime("%H:%M:%S", time.localtime())
-        self.publish({
-            "message": message, 
-            "timestamp": timestamp,
-            "node_count": self.count,
-        })
+        self.publish(
+            {
+                "message": message,
+                "timestamp": timestamp,
+                "node_count": self.count,
+            }
+        )
         return list(self.connections.keys())[0]
 
     def execute_set_variable(self):
         """
         Executes the set variable operation.
-        
-        Sets the value of a variable with the given name to the evaluated 
+
+        Sets the value of a variable with the given name to the evaluated
         value of the provided expression.
-        
+
         Returns:
             str: The key of the first connection.
         """
-        variable_name = self.parameters[0]['value']
-        variable_value = self.parameters[1]['value']
-        if self.parameters[0]['id'] == "List" and self.parameters[1]['value'] == '':
+        variable_name = self.parameters[0]["value"]
+        variable_value = self.parameters[1]["value"]
+        if self.parameters[0]["id"] == "List" and self.parameters[1]["value"] == "":
             variable_value = []
         evaluated = self.storage_handler.evaluate(variable_value)
         self.logger.debug("Setting variable: %s %s", variable_name, evaluated)
@@ -518,14 +552,14 @@ class AppMakerNode:
         """
         Executes the set variables operation.
 
-        Iterates through an array of variable objects, evaluating each value 
+        Iterates through an array of variable objects, evaluating each value
         and storing it using self.storage_handler.
 
         Returns:
             str: The key of the first connection.
         """
         try:
-            variables = json.loads(self.parameters[0]['value'])
+            variables = json.loads(self.parameters[0]["value"])
         except json.JSONDecodeError:
             self.logger.error("Error: Invalid JSON format for variables")
             return None
@@ -538,7 +572,7 @@ class AppMakerNode:
                 self.logger.warning("Skipping variable with missing name: %s", var)
                 continue
 
-            if variable_value == '' and self.parameters[0].get('id') == "List":
+            if variable_value == "" and self.parameters[0].get("id") == "List":
                 variable_value = []
 
             evaluated = self.storage_handler.evaluate(variable_value)
@@ -549,26 +583,26 @@ class AppMakerNode:
 
     def execute_random_number(self):
         """
-        Executes the generation of a random number within a specified range and stores it in 
+        Executes the generation of a random number within a specified range and stores it in
         a variable.
 
-        This method retrieves the variable name, minimum value, and maximum value from the 
-        parameters, generates a random floating-point number within the specified range, stores 
-        the generated number in the storage handler under the given variable name, and returns 
+        This method retrieves the variable name, minimum value, and maximum value from the
+        parameters, generates a random floating-point number within the specified range, stores
+        the generated number in the storage handler under the given variable name, and returns
         the first key from the connections.
 
         Returns:
             The first key from the connections dictionary.
         """
         try:
-            variable_name = self.parameters[0]['value']
-            minimum = float(self.parameters[1]['value'])
-            maximum = float(self.parameters[2]['value'])
+            variable_name = self.parameters[0]["value"]
+            minimum = float(self.parameters[1]["value"])
+            maximum = float(self.parameters[2]["value"])
             evaluated = random.uniform(minimum, maximum)
             self.logger.debug("Setting variable: %s %s", variable_name, evaluated)
             self.storage_handler.set(variable_name, evaluated)
             return list(self.connections.keys())[0]
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.handle_runtime_error(e)
             return None
 
@@ -576,8 +610,8 @@ class AppMakerNode:
         """
         Executes the generation of a random integer within a specified range and stores it.
 
-        This method retrieves the variable name and the minimum and maximum values from the 
-        parameters, generates a random integer within the specified range, and stores it using 
+        This method retrieves the variable name and the minimum and maximum values from the
+        parameters, generates a random integer within the specified range, and stores it using
         the storage handler.
         It also prints the variable name and the generated integer.
 
@@ -588,14 +622,14 @@ class AppMakerNode:
             ValueError: If the parameters for minimum or maximum values are not valid integers.
         """
         try:
-            variable_name = self.parameters[0]['value']
-            minimum = int(self.parameters[1]['value'])
-            maximum = int(self.parameters[2]['value'])
+            variable_name = self.parameters[0]["value"]
+            minimum = int(self.parameters[1]["value"])
+            maximum = int(self.parameters[2]["value"])
             evaluated = random.randint(minimum, maximum)
             self.logger.debug("Setting variable: %s %s", variable_name, evaluated)
             self.storage_handler.set(variable_name, evaluated)
             return list(self.connections.keys())[0]
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.handle_runtime_error(e)
             return None
 
@@ -603,7 +637,7 @@ class AppMakerNode:
         """
         Executes various operations between two lists based on the parameters provided.
 
-        The method retrieves two lists from storage, performs an operation on them 
+        The method retrieves two lists from storage, performs an operation on them
         (such as copying or appending), and then updates the storage with the result.
 
         Operations:
@@ -616,26 +650,26 @@ class AppMakerNode:
         Raises:
             Exception: If any error occurs during the execution of the list operation.
         """
-        try: 
-            source_list = self.storage_handler.get(self.parameters[0]['value'])
-            target_list = self.storage_handler.get(self.parameters[1]['value'])
-            target_list_obj = self.parameters[1]['value']
-            
-            if self.parameters[2]['value'] == "Copy":
+        try:
+            source_list = self.storage_handler.get(self.parameters[0]["value"])
+            target_list = self.storage_handler.get(self.parameters[1]["value"])
+            target_list_obj = self.parameters[1]["value"]
+
+            if self.parameters[2]["value"] == "Copy":
                 self.storage_handler.set(target_list_obj, source_list[:])
-            elif self.parameters[2]['value'] == "Append":
+            elif self.parameters[2]["value"] == "Append":
                 target_list.extend(source_list)
                 self.storage_handler.set(target_list_obj, target_list)
             return list(self.connections.keys())[0]
 
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.handle_runtime_error(e)
             return None
 
     def execute_list_operation(self):
         """
         Executes various list operations based on the parameters provided.
-        The operation to be performed is determined by the value of `self.parameters[1]['value']` 
+        The operation to be performed is determined by the value of `self.parameters[1]['value']`
         and `self.parameters[2]['value']`.
         The list to be operated on is retrieved from `self.storage_handler` using the key
         `self.parameters[0]['value']`.
@@ -645,82 +679,100 @@ class AppMakerNode:
             Exception: If any error occurs during the execution of the list operation.
         """
         try:
-            stored_list = self.storage_handler.get(self.parameters[0]['value'])
-            
-            if self.parameters[1]['value'] == "Pop":
+            stored_list = self.storage_handler.get(self.parameters[0]["value"])
+
+            if self.parameters[1]["value"] == "Pop":
                 stored_list.pop()
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Sort Ascending":
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Sort Ascending":
                 stored_list.sort()
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Sort Descending":
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Sort Descending":
                 stored_list.sort(reverse=True)
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Push":
-                evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Push":
+                evaluated = self.storage_handler.evaluate(self.parameters[2]["value"])
                 stored_list.append(evaluated)
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Delete by index":
-                evaluated_index = self.storage_handler.evaluate(self.parameters[3]['value'])
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Delete by index":
+                evaluated_index = self.storage_handler.evaluate(
+                    self.parameters[3]["value"]
+                )
                 stored_list.pop(evaluated_index)
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Delete All":
-                evaluated = self.storage_handler.evaluate(self.parameters[2]['value'])
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Delete All":
+                evaluated = self.storage_handler.evaluate(self.parameters[2]["value"])
                 stored_list.clear()
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Delete by value":
-                evaluated_index = self.storage_handler.evaluate(self.parameters[4]['value'])
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Delete by value":
+                evaluated_index = self.storage_handler.evaluate(
+                    self.parameters[4]["value"]
+                )
                 stored_list.remove(evaluated_index)
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[1]['value'] == "Set element by index":
-                evaluated_index = self.storage_handler.evaluate(self.parameters[5]['value'])
-                stored_list[evaluated_index] = self.storage_handler.evaluate(self.parameters[6]['value'])
-                self.storage_handler.set(self.parameters[0]['value'], stored_list)
-            elif self.parameters[2]['value'] == "Average":
-                meanvalue = sum(stored_list)/len(stored_list)
-                variable_name = self.parameters[1]['value']
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[1]["value"] == "Set element by index":
+                evaluated_index = self.storage_handler.evaluate(
+                    self.parameters[5]["value"]
+                )
+                stored_list[evaluated_index] = self.storage_handler.evaluate(
+                    self.parameters[6]["value"]
+                )
+                self.storage_handler.set(self.parameters[0]["value"], stored_list)
+            elif self.parameters[2]["value"] == "Average":
+                meanvalue = sum(stored_list) / len(stored_list)
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, meanvalue)
-            elif self.parameters[2]['value'] == "Max":
+            elif self.parameters[2]["value"] == "Max":
                 maxvalue = max(stored_list)
-                variable_name = self.parameters[1]['value']
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, maxvalue)
-            elif self.parameters[2]['value'] == "Min":
+            elif self.parameters[2]["value"] == "Min":
                 minvalue = min(stored_list)
-                variable_name = self.parameters[1]['value']
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, minvalue)
-            elif self.parameters[2]['value'] == "Standard Deviation":
-                meanvalue = sum(stored_list) / len(stored_list)            
-                variance = sum((x - meanvalue) ** 2 for x in stored_list) / len(stored_list)
-                stddev = variance ** 0.5
-                variable_name = self.parameters[1]['value']
+            elif self.parameters[2]["value"] == "Standard Deviation":
+                meanvalue = sum(stored_list) / len(stored_list)
+                variance = sum((x - meanvalue) ** 2 for x in stored_list) / len(
+                    stored_list
+                )
+                stddev = variance**0.5
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, stddev)
-            elif self.parameters[2]['value'] == "Length":
+            elif self.parameters[2]["value"] == "Length":
                 lenvalue = len(stored_list)
-                variable_name = self.parameters[1]['value']
-                self.storage_handler.set(variable_name, lenvalue)  
-            elif self.parameters[2]['value'] == "Includes":
-                valuetosearch = self.storage_handler.evaluate(self.parameters[3]['value'])
+                variable_name = self.parameters[1]["value"]
+                self.storage_handler.set(variable_name, lenvalue)
+            elif self.parameters[2]["value"] == "Includes":
+                valuetosearch = self.storage_handler.evaluate(
+                    self.parameters[3]["value"]
+                )
                 searchresult = valuetosearch in stored_list
-                variable_name = self.parameters[1]['value']
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, searchresult)
-            elif self.parameters[2]['value'] == "Element count":
-                valuetosearch = self.storage_handler.evaluate(self.parameters[4]['value'])
+            elif self.parameters[2]["value"] == "Element count":
+                valuetosearch = self.storage_handler.evaluate(
+                    self.parameters[4]["value"]
+                )
                 searchresult = stored_list.count(valuetosearch)
-                variable_name = self.parameters[1]['value']
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, searchresult)
-            elif self.parameters[2]['value'] == "Get element by index":
-                evaluated_index = self.storage_handler.evaluate(self.parameters[5]['value'])
+            elif self.parameters[2]["value"] == "Get element by index":
+                evaluated_index = self.storage_handler.evaluate(
+                    self.parameters[5]["value"]
+                )
                 searchresult = stored_list[evaluated_index]
-                variable_name = self.parameters[1]['value']
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, searchresult)
-            elif self.parameters[2]['value'] == "Get index of element":
-                valuetosearch = self.storage_handler.evaluate(self.parameters[6]['value'])
+            elif self.parameters[2]["value"] == "Get index of element":
+                valuetosearch = self.storage_handler.evaluate(
+                    self.parameters[6]["value"]
+                )
                 searchresult = stored_list.index(valuetosearch)
-                variable_name = self.parameters[1]['value']
+                variable_name = self.parameters[1]["value"]
                 self.storage_handler.set(variable_name, searchresult)
             return list(self.connections.keys())[0]
-        
-        except Exception as e: # pylint: disable=broad-except
+
+        except Exception as e:  # pylint: disable=broad-except
             self.handle_runtime_error(e)
             return None
 
@@ -740,22 +792,22 @@ class AppMakerNode:
         self.logger.debug("Executing node: %s %s", self.id, self.label)
         next_node_index = 0
         for p in self.parameters:
-            self.logger.debug(">> %s %s", p['id'], p['value'])
+            self.logger.debug(">> %s %s", p["id"], p["value"])
             # Evaluate the condition
             result = False
             try:
-                result = self.storage_handler.evaluate(str(p['value']))
+                result = self.storage_handler.evaluate(str(p["value"]))
                 if isinstance(result, str):
                     result = False
                 self.logger.debug("Result: %s", result)
-            except Exception as e: # pylint: disable=broad-except
+            except Exception as e:  # pylint: disable=broad-except
                 self.logger.debug("Error in evaluating the condition: %s", e)
             if result:
                 break
             next_node_index += 1
         self.logger.debug("Selected form condition: %s", next_node_index)
         if next_node_index >= len(self.connection_list):
-            next_node_index = len(self.connection_list) - 1 # The else condition
+            next_node_index = len(self.connection_list) - 1  # The else condition
             self.logger.debug("We are in the default case %s", next_node_index)
         real_output = self.find_proper_output_index_in_connections(next_node_index)
         if real_output == -1:
@@ -775,7 +827,9 @@ class AppMakerNode:
         # Select one of the outputs at random
         self.logger.debug("Executing node: %s %s", self.id, self.label)
         # Gather all the parameters and evaluate them
-        probabilities = [self.storage_handler.evaluate(x['value']) for x in self.parameters]
+        probabilities = [
+            self.storage_handler.evaluate(x["value"]) for x in self.parameters
+        ]
         prob_sum = sum(probabilities)
         random_prob = random.uniform(0, prob_sum)
         self.logger.debug(self.connection_list)
@@ -784,10 +838,10 @@ class AppMakerNode:
             if random_prob < prob:
                 self.logger.debug("Selected: %s", i)
                 real_output = self.find_proper_output_index_in_connections(i)
-                return self.connection_list[real_output]['target']
+                return self.connection_list[real_output]["target"]
             random_prob -= prob
         self.logger.debug("Something went wrong, returning the last connection")
-        return self.connection_list[-1]['target']
+        return self.connection_list[-1]["target"]
 
     def execute_thread_split(self):
         """
@@ -838,11 +892,11 @@ class AppMakerNode:
         # Wait for the delay time
         self.logger.debug("Executing node: %s %s", self.id, self.label)
         self.logger.debug(self.parameters)
-        if 'value' not in self.parameters[0]:
+        if "value" not in self.parameters[0]:
             self.logger.debug("Delay parameter not found")
             return None
-        self.logger.debug("Delay parameter: %s", self.parameters[0]['value'])
-        delay = self.storage_handler.evaluate(self.parameters[0]['value'])
+        self.logger.debug("Delay parameter: %s", self.parameters[0]["value"])
+        delay = self.storage_handler.evaluate(self.parameters[0]["value"])
         self.logger.debug("Delay: %s", delay)
         tt = 0
         while tt < float(delay) and not self.is_preempted:
@@ -854,7 +908,7 @@ class AppMakerNode:
         """
         Executes the general node.
 
-        This method prints the node ID and label, sleeps for 1 second, and returns 
+        This method prints the node ID and label, sleeps for 1 second, and returns
         the key of the first connection.
 
         Returns:
@@ -866,13 +920,13 @@ class AppMakerNode:
 
     def print_node(self):
         """
-        Print information about the node, including its ID, label, count, parameters, 
+        Print information about the node, including its ID, label, count, parameters,
         and connections.
         """
         self.logger.debug("Node: %s %s %s", self.id, self.label, self.count)
         self.logger.debug("Parameters: ")
         for p in self.parameters:
-            self.logger.debug("\t %s %s", p['id'], p['value'] if 'value' in p else "")
+            self.logger.debug("\t %s %s", p["id"], p["value"] if "value" in p else "")
         self.logger.debug("Connections: ")
         for c in self.connections:
             self.logger.debug("\tto %s", c)
