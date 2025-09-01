@@ -6,6 +6,7 @@ import logging
 import time
 import random
 import json
+from urllib.parse import urlencode
 
 
 class AppMakerNode:
@@ -316,6 +317,7 @@ class AppMakerNode:
                 )
 
             elif action["type"] == "rpc":
+
                 for p in self.data["data"]["parameters"]:
                     if p["id"] == "broker":
                         broker_id = p["value"]
@@ -339,6 +341,7 @@ class AppMakerNode:
                         self.storage_handler.set(self.action_variable, response)
 
             elif action["type"] == "action":
+
                 for p in self.data["data"]["parameters"]:
                     if p["id"] == "broker":
                         broker_id = p["value"]
@@ -353,6 +356,35 @@ class AppMakerNode:
                 response = self.storage_handler.action_action_call(
                     action,
                     correct_broker,  # broker data lives in action, this is unused
+                    self.data["data"]["parameters"],
+                )
+                if "storage" in action:
+                    self.action_variable = action["storage"]
+                    if self.action_variable:
+                        self.storage_handler.set(self.action_variable, response)
+
+            # handle all rest calls
+            elif action["type"] == "RESTCall":
+                restapi_host = action.get("restAPI").get("host")
+                restapi_port = action.get("restAPI").get("port")
+                restapi_path = action.get("path")
+                headers = action.get("restAPI").get("headers", {})
+                request_verb = action.get("verb", "GET")
+                payload = action.get("payload", {})
+                query_params = action.get("query_params", [])  # array of dictionaries
+
+                # Convert to list of tuples
+                query_tuples = [(k, v) for d in query_params for k, v in d.items()]
+
+                full_url = f"{restapi_host}:{restapi_port}{restapi_path}"
+                if query_tuples:  # only if there are params
+                    full_url += f"?{urlencode(query_tuples)}"
+
+                response = self.storage_handler.action_rest_call(
+                    payload,
+                    full_url,
+                    request_verb,
+                    headers,
                     self.data["data"]["parameters"],
                 )
 

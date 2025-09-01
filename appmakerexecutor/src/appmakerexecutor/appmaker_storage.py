@@ -12,6 +12,7 @@ import string  # pylint: disable=unused-import
 import random  # pylint: disable=unused-import
 import statistics  # pylint: disable=unused-import
 import numpy as np  # pylint: disable=unused-import
+import requests
 
 from commlib.node import Node as CommlibNode
 from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
@@ -111,16 +112,26 @@ class StorageHandler:
                     debug=True,
                 )
             elif broker_type == "mqtt":
+                params = broker.get("parameters", {})
+
+                # Build kwargs for MQTTConnectionParameters
+                conn_kwargs = {
+                    "host": params.get("host", "localhost"),
+                    "port": params.get("port", 1883),
+                    "keepalive": 60,
+                }
+
+                # Only pass transport/username/password if non-empty
+                if params.get("transport") != "":
+                    conn_kwargs["transport"] = params["transport"]
+                if params.get("username") != "":
+                    conn_kwargs["username"] = params["username"]
+                if params.get("password") != "":
+                    conn_kwargs["password"] = params["password"]
+
                 self.commlib_nodes[broker["name"]] = CommlibNode(
                     node_name=f"storage_commlib_node_{broker['name']}",
-                    connection_params=MQTTConnectionParameters(
-                        host=broker.get("parameters", {}).get("host"),
-                        port=broker.get("parameters", {}).get("port"),
-                        username=broker.get("parameters", {}).get("username"),
-                        password=broker.get("parameters", {}).get("password"),
-                        transport=broker.get("parameters", {}).get("transport"),
-                        keepalive=60,
-                    ),
+                    connection_params=MQTTConnectionParameters(**conn_kwargs),
                     heartbeats=False,
                     debug=True,
                 )
@@ -460,7 +471,6 @@ class StorageHandler:
         """
         _topic = self.fix_topic(action["topic"])
         _broker = action["broker"]
-        print("I RUNNNNNNN PUBLISHHHHHHHHH")
         if _topic not in self.publishers:
             # Add it
             self.logger.debug("Creating publisher for action: %s", _topic)
@@ -534,6 +544,7 @@ class StorageHandler:
         payload = self.iterate_payload(payload, parameters)
         self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
+
         response = self.rpc_clients[_topic]["rpc"].call(
             payload,
             timeout=120,
@@ -565,7 +576,7 @@ class StorageHandler:
         _topic = self.fix_topic(action["topic"])
         _broker = action["broker"]
         if _topic not in self.action_clients:
-            _action_call = self.commlib_nodes[broker["name"]].create_action_client(
+            _action_call = self.commlib_nodes[_broker["name"]].create_action_client(
                 action_name=_topic,
             )
             _action_call.run()
@@ -591,6 +602,54 @@ class StorageHandler:
             wait=True, timeout=120, wait_max_sec=120
         )
         return response
+
+    def action_rest_call(self, payload, full_url, request_verb, headers, parameters):
+        """
+        Handles the execution of a REST API call.
+
+        Args:
+            payload (dict): The payload to be sent with the REST API call.
+            full_url (str): The full URL for the REST API endpoint.
+            request_verb (str): The HTTP verb to use for the REST API call (e.g., 'GET', 'POST').
+            headers (dict): The headers to include in the REST API call.
+            parameters (dict): A dictionary of parameters to replace variables in the payload.
+
+        Returns:
+            object: The response from the REST API call.
+        """
+
+        # Map verb to requests method
+        method_map = {
+            "GET": requests.get,
+            "POST": requests.post,
+            "PUT": requests.put,
+            "DELETE": requests.delete,
+        }
+
+        if request_verb not in method_map:
+            raise ValueError(f"Unsupported HTTP verb: {request_verb}")
+
+        # Handle the the payload if necessary
+        _payload = {}
+        if payload:
+            _payload = copy.deepcopy(payload)
+            self.logger.debug("\tPayload: %s", _payload)
+            # iterate through the payload and replace the variables
+            _payload = self.iterate_payload(_payload, parameters)
+            self.logger.debug("\tIterated Payload: %s", _payload)
+
+        # make the api request
+        if request_verb in ["POST", "PUT"]:
+            response = method_map[request_verb](
+                full_url, json=_payload, headers=headers
+            )
+        else:  # GET, DELETE
+            response = method_map[request_verb](
+                full_url, params=payload, headers=headers
+            )
+
+        # Return the body of the response
+        return response.json()
 
     def iterate_payload(self, payload, parameters):
         """
