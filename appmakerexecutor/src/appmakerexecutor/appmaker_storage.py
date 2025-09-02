@@ -19,6 +19,7 @@ from commlib.transports.redis import ConnectionParameters as RedisConnectionPara
 from commlib.transports.amqp import ConnectionParameters as AMQPConnectionParameters
 from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 
+from db_connector import DBConnector
 
 import config as CONFIG  # type: ignore # pylint: disable=import-error
 
@@ -77,6 +78,7 @@ class StorageHandler:
         self.stop_publisher = stop_publisher
         self._logger = logging.getLogger(__name__)
         self.commlib_nodes = {}  # to store commlib nodes for each broker
+        self.database_connectors = {}
 
         # Collect all nodes that contain actions
         self.action_nodes = []
@@ -86,13 +88,18 @@ class StorageHandler:
                 if node.get("action"):
                     self.action_nodes.append(node)
 
-        # Collect the info to create commlib nodes for each broker
+        # Collect the info to create commlib nodes for each broker and database connections for each database
         commlib_nodes_info = []
+        database_info = []
         for action_node in self.action_nodes:
             if "broker" in action_node["action"]:
                 broker = action_node["action"]["broker"]
                 if broker not in commlib_nodes_info:
                     commlib_nodes_info.append(broker)
+            if "database" in action_node["action"]:
+                database = action_node["action"]["database"]
+                if database not in database_info:
+                    database_info.append(database)
 
         # create commlib nodes for each broker with the correct parameters
         for broker in commlib_nodes_info:
@@ -148,6 +155,18 @@ class StorageHandler:
                     heartbeats=False,
                     debug=True,
                 )
+
+        # Create Database connectors for each database
+        for db in database_info:
+            self.database_connectors[db["name"]] = DBConnector(
+                db_type=db.get("type"),
+                host=db.get("host"),
+                port=db.get("port"),
+                user=db.get("username"),
+                password=db.get("password"),
+                connection_url=db.get("connection_url"),
+                database=db.get("db_name"),
+            )
 
         self.commlib_node = CommlibNode(
             node_name="storage_commlib_node",
@@ -650,6 +669,35 @@ class StorageHandler:
 
         # Return the body of the response
         return response.json()
+
+    def action_execute_db_query(self, action, parameters):
+        """
+        Executes a database query based on the provided action and parameters.
+
+        Args:
+            action (dict): A dictionary containing the action details, including 'database' and
+                'query'.
+            parameters (dict): A dictionary of parameters to replace variables in the query.
+
+        Returns:
+            object: The result of the database query execution.
+        """
+        db_name = action.get("database", {}).get("name")
+        if db_name not in self.database_connectors:
+            raise ValueError(f"Database connector for {db_name} not found")
+
+        connector = self.database_connectors[db_name]
+        query = action.get("query", "")
+        if not query:
+            raise ValueError("No query provided in action")
+
+        # Replace variables in the query
+        query = self.iterate_payload({"query": query}, parameters)["query"]
+        self.logger.debug("Executing DB query: %s", query)
+
+        # Execute the query and return the result
+        result = connector.execute_query_general(query)
+        return result
 
     def iterate_payload(self, payload, parameters):
         """

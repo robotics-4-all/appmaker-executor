@@ -393,6 +393,16 @@ class AppMakerNode:
                     if self.action_variable:
                         self.storage_handler.set(self.action_variable, response)
 
+            elif action["type"] == "Database":
+                query_result = self.storage_handler.action_execute_db_query(
+                    action,
+                    self.data["data"]["parameters"],
+                )
+                if "storage" in action:
+                    self.action_variable = action["storage"]
+                    if self.action_variable:
+                        self.storage_handler.set(self.action_variable, query_result)
+
         # articifial delay
         time.sleep(self.storage_handler.evaluate(self.artificial_delay))
 
