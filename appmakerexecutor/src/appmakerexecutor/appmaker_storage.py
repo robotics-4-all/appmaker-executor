@@ -101,6 +101,33 @@ class StorageHandler:
                 if database not in database_info:
                     database_info.append(database)
 
+        # If the action is pub, sub, rpc or action but does not have a broker, use the default redis broker
+        default_redis_broker = {
+            "name": "default_redis",
+            "type": "redis",
+            "parameters": {
+                "host": CONFIG.REDIS_HOST,
+                "port": CONFIG.REDIS_PORT,
+                "username": CONFIG.REDIS_USERNAME,
+                "password": CONFIG.REDIS_PASSWORD,
+                "db": CONFIG.REDIS_DB,
+            },
+        }
+        commlib_nodes_info.append(default_redis_broker)
+
+        for action_node in self.action_nodes:
+            if "broker" not in action_node["action"] and action_node["action"][
+                "type"
+            ] in [
+                "publish",
+                "subscribe",
+                "rpc_call",
+                "action_call",
+                "start_simulation",
+                "stop_simulation",
+            ]:
+                action_node["action"]["broker"] = default_redis_broker
+
         # create commlib nodes for each broker with the correct parameters
         for broker in commlib_nodes_info:
             broker_type = broker.get("type")
@@ -168,50 +195,41 @@ class StorageHandler:
                 database=db.get("db_name"),
             )
 
-        self.commlib_node = CommlibNode(
-            node_name="storage_commlib_node",
-            connection_params=RedisConnectionParameters(
-                host=CONFIG.REDIS_HOST,
-                port=CONFIG.REDIS_PORT,
-                username=CONFIG.REDIS_USERNAME,
-                password=CONFIG.REDIS_PASSWORD,
-                db=CONFIG.REDIS_DB,
-                socket_timeout=60,
-            ),
-            heartbeats=False,
-            debug=True,
-        )
-
-        self.goaldsl_subscriber = self.commlib_node.create_psubscriber(
+        self.goaldsl_subscriber = self.commlib_nodes[
+            "default_redis"
+        ].create_psubscriber(
             topic="goaldsl.*.event", on_message=self.handle_goaldsl_message
         )
 
-        self.streamsim_start_rpc_client = self.commlib_node.create_rpc_client(
+        self.streamsim_start_rpc_client = self.commlib_nodes[
+            "default_redis"
+        ].create_rpc_client(
             rpc_name=f"streamsim.{self.uid}.set_configuration_local",
         )
 
-        self.streamsim_reset_rpc_client = self.commlib_node.create_rpc_client(
+        self.streamsim_reset_rpc_client = self.commlib_nodes[
+            "default_redis"
+        ].create_rpc_client(
             rpc_name=f"streamsim.{self.uid}.reset",
         )
 
-        self.goaldsl_start_rpc = self.commlib_node.create_rpc_client(
+        self.goaldsl_start_rpc = self.commlib_nodes["default_redis"].create_rpc_client(
             rpc_name=f"goaldsl.{self.uid}.deploy_sync",
         )
 
-        self.goaldsl_reset_rpc = self.commlib_node.create_rpc_client(
+        self.goaldsl_reset_rpc = self.commlib_nodes["default_redis"].create_rpc_client(
             rpc_name=f"goaldsl.{self.uid}.killall_sync",
         )
 
-        self.variables_publisher = self.commlib_node.create_publisher(
+        self.variables_publisher = self.commlib_nodes["default_redis"].create_publisher(
             topic="appcreator.variables"
         )
 
-        self.scores_publisher = self.commlib_node.create_publisher(
+        self.scores_publisher = self.commlib_nodes["default_redis"].create_publisher(
             topic="appcreator.scores.internal"
         )
 
         self.identify_subscribers_and_start_them()
-        self.commlib_node.run()
 
     @property
     def logger(self):
@@ -471,7 +489,7 @@ class StorageHandler:
         else:
             self.logger.error("Active subscriber not found for action: %s", _topic)
 
-    def action_publish(self, action, broker, parameters):
+    def action_publish(self, action, parameters):
         """
         Publishes an action to a specified topic using a publisher.
 
@@ -515,7 +533,7 @@ class StorageHandler:
         # publish it
         self.publishers[_topic]["publisher"].publish(payload)
 
-    def action_rpc_call(self, action, broker, parameters):
+    def action_rpc_call(self, action, parameters):
         """
         Handles the RPC call for a given action.
 
@@ -571,7 +589,7 @@ class StorageHandler:
         self.logger.debug("RPC called with response: %s", response)
         return response
 
-    def action_action_call(self, action, broker, parameters):
+    def action_action_call(self, action, parameters):
         """
         Handles the execution of an action call.
 
@@ -945,7 +963,6 @@ class StorageHandler:
             self.logger.info("Stopping commlib nodes")
             for node in self.commlib_nodes.values():
                 node.stop()
-            self.commlib_node.stop()
         except:  # pylint: disable=bare-except
             self.logger.error("Error stopping subscribers")
 

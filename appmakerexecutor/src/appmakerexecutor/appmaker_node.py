@@ -83,6 +83,7 @@ class AppMakerNode:
         self.executor_to_preempt = None
         self.artificial_delay = 0
         self.stop_publisher = stop_publisher
+        self.default_broker_data = {"name": "default_redis", "type": "redis"}
 
         self._logger = logging.getLogger(__name__)
 
@@ -253,20 +254,10 @@ class AppMakerNode:
 
             # Subscriber
             if action["type"] == "subscribe":
-                # NOTE: Commenting out since we assume only redis here
-                # # Find the broker id:
-                # for p in self.data['data']['parameters']:
-                #     if p['id'] == 'broker':
-                #         print("Broker", p)
-                #         broker_id = p['value']
-                #         break
-                # # Get broker
-                # correct_broker = None
-                # for b in self.brokers:
-                #     if b["id"] == broker_id:
-                #         correct_broker = b
-                #         break
-                correct_broker = None
+                # If it does not already have broker info we assume default redis
+                if action.get("broker") is None:
+                    action["broker"] = self.default_broker_data
+
                 # Find the operation. Start or stop?
                 self.logger.debug(">> Parameters: %s", self.data["data"]["parameters"])
                 for p in self.data["data"]["parameters"]:
@@ -276,62 +267,46 @@ class AppMakerNode:
 
                 self.action_variable = action["storage"]
 
-                self.logger.debug("The correct broker is: %s", correct_broker)
                 if operation == "start":
                     self.logger.debug("Attempting to start subscriber")
                     self.storage_handler.start_subscriber(
                         action,
-                        correct_broker,
+                        action["broker"],
                         self.on_message,
                     )
                     self.logger.debug(">> Subscribing to: %s", action["topic"])
                 elif operation == "stop":
                     self.storage_handler.stop_subscriber(
                         action,
-                        correct_broker,
+                        action["broker"],
                     )
                 else:
                     self.logger.error(
                         "Something went wrong with action: %s %s %s",
                         action,
-                        correct_broker,
+                        action["broker"],
                         operation,
                     )
 
             elif action["type"] == "publish":
-                for p in self.data["data"]["parameters"]:
-                    if p["id"] == "broker":
-                        broker_id = p["value"]
-                        break
-                # Get broker
-                correct_broker = None
-                for b in self.brokers:
-                    if b["id"] == broker_id:
-                        correct_broker = b
-                        break
+
+                # If it does not already have broker info we assume default redis
+                if action.get("broker") is None:
+                    action["broker"] = self.default_broker_data
 
                 self.storage_handler.action_publish(
                     action,
-                    correct_broker,  # broker data lives in action, this is unused
                     self.data["data"]["parameters"],
                 )
 
             elif action["type"] == "rpc":
 
-                for p in self.data["data"]["parameters"]:
-                    if p["id"] == "broker":
-                        broker_id = p["value"]
-                        break
-                # Get broker
-                correct_broker = None
-                for b in self.brokers:
-                    if b["id"] == broker_id:
-                        correct_broker = b
-                        break
+                # If it does not already have broker info we assume default redis
+                if action.get("broker") is None:
+                    action["broker"] = self.default_broker_data
 
                 response = self.storage_handler.action_rpc_call(
                     action,
-                    correct_broker,  # broker data lives in action, this is unused
                     self.data["data"]["parameters"],
                 )
 
@@ -342,20 +317,12 @@ class AppMakerNode:
 
             elif action["type"] == "action":
 
-                for p in self.data["data"]["parameters"]:
-                    if p["id"] == "broker":
-                        broker_id = p["value"]
-                        break
-                # Get broker
-                correct_broker = None
-                for b in self.brokers:
-                    if b["id"] == broker_id:
-                        correct_broker = b
-                        break
+                # If it does not already have broker info we assume default redis
+                if action.get("broker") is None:
+                    action["broker"] = self.default_broker_data
 
                 response = self.storage_handler.action_action_call(
                     action,
-                    correct_broker,  # broker data lives in action, this is unused
                     self.data["data"]["parameters"],
                 )
                 if "storage" in action:
@@ -364,11 +331,11 @@ class AppMakerNode:
                         self.storage_handler.set(self.action_variable, response)
 
             # handle all rest calls
-            elif action["type"] == "RESTCall":
-                restapi_host = action.get("restAPI").get("host")
-                restapi_port = action.get("restAPI").get("port")
+            elif action["type"] == "RestCall":
+                restapi_host = action.get("RestAPI").get("host")
+                restapi_port = action.get("RestAPI").get("port")
                 restapi_path = action.get("path")
-                headers = action.get("restAPI").get("headers", {})
+                headers = action.get("RestAPI").get("headers", {})
                 request_verb = action.get("verb", "GET")
                 payload = action.get("payload", {})
                 query_params = action.get("query_params", [])  # array of dictionaries
