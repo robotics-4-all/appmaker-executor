@@ -560,14 +560,15 @@ class StorageHandler:
         """
         _topic = self.fix_topic(action["topic"])
         _broker = action["broker"]
-        if _topic not in self.rpc_clients:
+        _topic_key = f"{_topic}_{hash(json.dumps(action['payload'], sort_keys=True))}"
+        if _topic_key not in self.rpc_clients:
             _rpc_call = self.commlib_nodes[_broker["name"]].create_rpc_client(
                 rpc_name=_topic,
             )
             _rpc_call.run()
             self.logger.debug("Creating RPC client for action: %s", _topic)
 
-            self.rpc_clients[_topic] = {
+            self.rpc_clients[_topic_key] = {
                 "rpc": _rpc_call,
                 "broker": _broker,
                 "initial_payload": action["payload"],
@@ -575,14 +576,15 @@ class StorageHandler:
 
         self.logger.debug("RPC calling the action")
         # Handle the the payload
-        payload = copy.deepcopy(self.rpc_clients[_topic]["initial_payload"])
+        payload = copy.deepcopy(self.rpc_clients[_topic_key]["initial_payload"])
         self.logger.debug("\tPayload: %s", payload)
         # iterate through the payload and replace the variables
         payload = self.iterate_payload(payload, parameters)
         self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
 
-        response = self.rpc_clients[_topic]["rpc"].call(
+        print(payload)
+        response = self.rpc_clients[_topic_key]["rpc"].call(
             payload,
             timeout=120,
         )

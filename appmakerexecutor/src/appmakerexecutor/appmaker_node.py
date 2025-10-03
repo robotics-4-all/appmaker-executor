@@ -304,7 +304,6 @@ class AppMakerNode:
                 # If it does not already have broker info we assume default redis
                 if action.get("broker") is None:
                     action["broker"] = self.default_broker_data
-
                 response = self.storage_handler.action_rpc_call(
                     action,
                     self.data["data"]["parameters"],
