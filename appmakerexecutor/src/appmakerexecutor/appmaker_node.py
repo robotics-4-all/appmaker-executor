@@ -7,6 +7,11 @@ import time
 import random
 import json
 from urllib.parse import urlencode
+import config as CONFIG
+from commlib.node import Node as CommlibNode
+from commlib.transports.redis import ConnectionParameters as RedisConnectionParameters
+from commlib.transports.amqp import ConnectionParameters as AMQPConnectionParameters
+from commlib.transports.mqtt import ConnectionParameters as MQTTConnectionParameters
 
 
 class AppMakerNode:
@@ -243,6 +248,8 @@ class AppMakerNode:
             next_node = self.deploy_goaldsl()
         elif self.label == "Stop GoalDSL model":
             next_node = self.stop_goaldsl()
+        elif self.label == "Event Trigger":
+            next_node = self.execute_event_trigger()
         else:  # All other nodes
             next_node = self.execute_general()
 
@@ -938,3 +945,78 @@ class AppMakerNode:
         self.logger.debug("Connections: ")
         for c in self.connections:
             self.logger.debug("\tto %s", c)
+
+    def execute_event_trigger(self):
+        """
+        Executes the event trigger node.
+
+        Returns:
+            str: The key of the first connection.
+        """
+        self.logger.debug("Executing node: %s %s", self.id, self.label)
+        params = self.data["data"]["parameters"]
+
+        topic = params[0].get("value", "")
+        payload = params[1].get("value", "")
+        broker_type = params[2].get("value", "redis")
+        broker_host = params[3].get("value")
+        broker_port = params[4].get("value")
+        broker_username = params[5].get("value")
+        broker_password = params[6].get("value")
+
+        if any(not x for x in [broker_host, broker_port]):
+            broker = {
+                "host": CONFIG.REDIS_HOST,
+                "port": CONFIG.REDIS_PORT,
+                "username": CONFIG.REDIS_USERNAME,
+                "password": CONFIG.REDIS_PASSWORD,
+                # "db": CONFIG.REDIS_DB,
+            }
+        else:
+            broker = {
+                "host": broker_host,
+                "port": int(broker_port),
+                "username": broker_username,
+                "password": broker_password,
+            }
+
+        # create the appropriate commlib node
+        conn_params = None
+        if broker_type == "redis":
+            conn_params = RedisConnectionParameters(**broker)
+        elif broker_type == "mqtt":
+            conn_params = MQTTConnectionParameters(**broker)
+        elif broker_type == "amqp":
+            conn_params = AMQPConnectionParameters(**broker)
+        else:
+            self.logger.error("Unsupported broker type: %s", broker_type)
+            return None
+
+        node = CommlibNode(
+            node_name=f"event_trigger_{self.id}",
+            connection_params=conn_params,
+        )
+
+        # state variable to be updated by callback
+        self.received = False
+        self.correct_payload = json.loads(payload)
+
+        subscriber = node.create_subscriber(
+            topic=topic,
+            on_message=self.event_trigger_on_message,
+        )
+        subscriber.run()
+        while not self.received and not self.is_preempted:
+            time.sleep(0.1)
+        return list(self.connections.keys())[0]
+
+    def event_trigger_on_message(self, message):
+        """
+        Callback for received messages.
+        """
+        self.logger.debug("Received message: %s", message)
+        if message == self.correct_payload:
+            self.logger.info("Correct message received!")
+            self.received = True
+        else:
+            self.received = False
