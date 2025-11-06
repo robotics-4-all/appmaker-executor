@@ -583,7 +583,6 @@ class StorageHandler:
         self.logger.debug("\tIterated Payload: %s", payload)
         # publish it
 
-        print(payload)
         response = self.rpc_clients[_topic_key]["rpc"].call(
             payload,
             timeout=120,

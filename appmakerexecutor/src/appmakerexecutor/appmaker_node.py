@@ -5,6 +5,7 @@ File that initializes an Node of the AppMaker DSL.
 import logging
 import time
 import random
+import copy
 import json
 from urllib.parse import urlencode
 import config as CONFIG
@@ -958,6 +959,19 @@ class AppMakerNode:
 
         topic = params[0].get("value", "")
         payload = params[1].get("value", "")
+
+        # Replace variables in payload
+        payload_updated = json.loads(copy.deepcopy(payload))
+        global_vars = self.storage_handler.storage
+
+        vars_as_params = [
+            {"id": key, "value": value} for key, value in global_vars.items()
+        ]
+
+        # iterate through the payload and replace the variables
+        payload_updated = self.storage_handler.iterate_payload(
+            payload_updated, vars_as_params
+        )
         broker_type = params[2].get("value", "redis")
         broker_host = params[3].get("value")
         broker_port = params[4].get("value")
@@ -972,12 +986,17 @@ class AppMakerNode:
                 "password": CONFIG.REDIS_PASSWORD,
                 # "db": CONFIG.REDIS_DB,
             }
-        else:
+        elif broker_username and broker_password:
             broker = {
                 "host": broker_host,
                 "port": int(broker_port),
                 "username": broker_username,
                 "password": broker_password,
+            }
+        else:
+            broker = {
+                "host": broker_host,
+                "port": int(broker_port),
             }
 
         # create the appropriate commlib node
@@ -999,7 +1018,7 @@ class AppMakerNode:
 
         # state variable to be updated by callback
         self.received = False
-        self.correct_payload = json.loads(payload)
+        self.correct_payload = payload_updated
 
         subscriber = node.create_subscriber(
             topic=topic,
