@@ -1,7 +1,10 @@
 services:
   appexecutor:
+    build: .
     image: appexecutor
+    container_name: appexecutor
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     network_mode: host
     env_file:
       - ./.env
+    restart: unless-stopped
