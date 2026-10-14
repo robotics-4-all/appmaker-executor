@@ -18,7 +18,6 @@ from commlib.transports.redis import ConnectionParameters as RedisConnectionPara
 from appmaker_executor import AppMakerExecutor  # type: ignore # pylint: disable=import-error
 import config as CONFIG  # type: ignore # pylint: disable=import-error
 
-
 logging.basicConfig(format="%(asctime)s - %(message)s")
 if CONFIG.ZERO_LOGS:
     logging.disable()
@@ -53,6 +52,10 @@ class AppMaker:
     A class that initializes an AppMakerExecutor.
     """
 
+    MQTT_CONNECT_ATTEMPTS = 20
+    MQTT_CONNECT_DELAY = 1.0
+    MQTT_CONNECT_DELAY_MAX = 10.0
+
     def __init__(self, uid):
         self.uid = uid
         self.commlib_node = None
@@ -72,6 +75,59 @@ class AppMaker:
     def logger(self):
         return self._logger
 
+    def _make_commlib_node(self):
+        return CommlibNode(
+            node_name=f"locsys.app_executor_node.{self.uid}",
+            connection_params=self.conn_params,
+            heartbeats=True,
+            debug=True,
+        )
+
+    def create_mqtt_interface(self, description, create):
+        """
+        Creates an MQTT interface, retrying while the connection is dropped.
+
+        The broker silently discards a large share of TCP connection attempts,
+        and commlib raises on the first failure, so a single lost SYN must not
+        take the whole executor down.
+
+        Args:
+            description (str): What is being created, used for logging.
+            create (Callable): Factory returning the commlib interface.
+
+        Returns:
+            The commlib subscriber or publisher.
+
+        Raises:
+            ConnectionError: If every attempt failed.
+        """
+        delay = self.MQTT_CONNECT_DELAY
+        for attempt in range(1, self.MQTT_CONNECT_ATTEMPTS + 1):
+            try:
+                return create()
+            except ConnectionError:
+                if attempt == self.MQTT_CONNECT_ATTEMPTS:
+                    self.logger.critical(
+                        "Could not create %s after %s attempts", description, attempt
+                    )
+                    raise
+                self.logger.warning(
+                    "Connection dropped while creating %s (attempt %s/%s), "
+                    "retrying in %.1fs",
+                    description,
+                    attempt,
+                    self.MQTT_CONNECT_ATTEMPTS,
+                    delay,
+                )
+                time.sleep(delay)
+                delay = min(delay * 2, self.MQTT_CONNECT_DELAY_MAX)
+                try:
+                    self.commlib_node.stop()
+                except Exception:  # pylint: disable=broad-except
+                    pass
+                self.commlib_node = self._make_commlib_node()
+        raise ConnectionError(description)
+
     def on_message(self, message):
         """
         Handles incoming messages.
@@ -83,6 +139,7 @@ class AppMaker:
             None
         """
         try:
+            print(f"I RECEIVED{message}")
             self.execution_uid = "".join(
                 random.choices(string.ascii_uppercase + string.digits, k=16)
             )
@@ -152,6 +209,29 @@ class AppMaker:
         except Exception as e:  # pylint: disable=broad-except
             self.logger.error("Error on message: %s", e)
 
+    def mqtt_alive(self):
+        """
+        Reports whether every MQTT endpoint transport is still connected.
+
+        commlib raises ConnectionError inside the paho network thread on any
+        disconnect, which kills the thread while the node state stays RUNNING
+        forever. The old watchdog only looked at the node state, so a dropped
+        broker connection left the executor deaf without ever restarting.
+        """
+        try:
+            node = self.commlib_node
+            endpoints = list(getattr(node, "_subscribers", [])
+                             + getattr(node, "_publishers", []))
+        except Exception:  # pylint: disable=broad-except
+            return False
+        if not endpoints:
+            return False
+        for endpoint in endpoints:
+            transport = getattr(endpoint, "_transport", None)
+            if transport is None or not getattr(transport, "is_connected", False):
+                return False
+        return True
+
     def run(self):
         """
         Runs the AppMaker.
@@ -183,29 +263,39 @@ class AppMaker:
             tls_insecure=True,
         )
 
-        self.commlib_node = CommlibNode(
-            node_name=f"locsys.app_executor_node.{self.uid}",
-            connection_params=self.conn_params,
-            heartbeats=True,
-            debug=True,
-        )
+        self.commlib_node = self._make_commlib_node()
         print("Connected to broker")
 
-        self.commlib_node.create_subscriber(
-            topic=f"appcreator.{self.uid}.deploy", on_message=self.on_message
+        deploy_topic = f"appcreator/{self.uid}/deploy"
+        self.create_mqtt_interface(
+            f"subscriber for {deploy_topic}",
+            lambda: self.commlib_node.create_subscriber(
+                topic=deploy_topic, on_message=self.on_message
+            ),
         )
-        self.logger.info("Subscribed to %s", f"appcreator.{self.uid}.deploy")
+        self.logger.info("Subscribed to %s", deploy_topic)
 
-        self.commlib_node.create_subscriber(
-            topic=f"appcreator.{self.uid}.stop", on_message=self.on_message_stop
+        stop_topic = f"appcreator/{self.uid}/stop"
+        self.create_mqtt_interface(
+            f"subscriber for {stop_topic}",
+            lambda: self.commlib_node.create_subscriber(
+                topic=stop_topic, on_message=self.on_message_stop
+            ),
         )
-        self.logger.info("Subscribed to %s", f"appcreator.{self.uid}.stop")
+        self.logger.info("Subscribed to %s", stop_topic)
 
-        self.scores_publisher = self.commlib_node.create_publisher(
-            topic="appcreator.scores",
+        self.scores_publisher = self.create_mqtt_interface(
+            "publisher for appcreator.scores",
+            lambda: self.commlib_node.create_publisher(
+                topic="appcreator.scores",
+            ),
         )
-        self.goaldsl_scores_publisher = self.commlib_node.create_publisher(
-            topic=f"streamsim.{self.uid}.notify",
+        goaldsl_topic = f"streamsim.{self.uid}.notify"
+        self.goaldsl_scores_publisher = self.create_mqtt_interface(
+            f"publisher for {goaldsl_topic}",
+            lambda: self.commlib_node.create_publisher(
+                topic=goaldsl_topic,
+            ),
         )
 
         self.commlib_node.run()
@@ -250,23 +340,43 @@ if __name__ == "__main__":
         exit(0)
 
     _uid = sys.argv[1]
+    _hz = 0.1
+    _restart_after_dead_secs = 15.0
     appmaker = AppMaker(_uid)
     appmaker.run()
     try:
+        dead_since = None
         while True:
-            time.sleep(0.1)
+            time.sleep(_hz)
             # if not appmaker.commlib_node.health:
-            if not appmaker.commlib_node.state.name == "RUNNING":
-                try:
-                    print("Connection lost, restarting nodes")
-                    appmaker.commlib_node.stop()
-                    del appmaker.commlib_node
-                    appmaker.local_commlib_node.stop()
-                    del appmaker.local_commlib_node
-                    time.sleep(1)
-                except Exception as e:  # pylint: disable=broad-except
-                    print("Error stopping nodes", e)
-                appmaker.run()
+            try:
+                node_running = appmaker.commlib_node.state.name == "RUNNING"
+            except Exception:  # pylint: disable=broad-except
+                node_running = False
+            if not node_running:
+                dead_since = None
+            elif appmaker.mqtt_alive():
+                dead_since = None
+                continue
+            elif dead_since is None:
+                # Grace period: CONNACK may still be in flight right after
+                # startup, so only restart after sustained transport death.
+                dead_since = time.monotonic()
+                print("MQTT connection lost, waiting for recovery before restarting nodes")
+                continue
+            elif time.monotonic() - dead_since < _restart_after_dead_secs:
+                continue
+            try:
+                print("MQTT connection lost, restarting nodes")
+                appmaker.commlib_node.stop()
+                del appmaker.commlib_node
+                appmaker.local_commlib_node.stop()
+                del appmaker.local_commlib_node
+                time.sleep(1)
+            except Exception as e:  # pylint: disable=broad-except
+                print("Error stopping nodes", e)
+            appmaker.run()
+            dead_since = None
     except KeyboardInterrupt:
         try:
             appmaker.commlib_node.stop()

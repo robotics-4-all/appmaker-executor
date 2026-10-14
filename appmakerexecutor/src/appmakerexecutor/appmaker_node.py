@@ -89,7 +89,17 @@ class AppMakerNode:
         self.executor_to_preempt = None
         self.artificial_delay = 0
         self.stop_publisher = stop_publisher
-        self.default_broker_data = {"name": "default_redis", "type": "redis"}
+        self.default_broker_data = {
+            "name": "default_redis",
+            "type": "redis",
+            "parameters": {
+                "host": CONFIG.REDIS_HOST,
+                "port": CONFIG.REDIS_PORT,
+                "username": CONFIG.REDIS_USERNAME,
+                "password": CONFIG.REDIS_PASSWORD,
+                "db": CONFIG.REDIS_DB,
+            },
+        }
 
         self._logger = logging.getLogger(__name__)
 
@@ -531,8 +541,8 @@ class AppMakerNode:
             str: The key of the first connection.
         """
         self.logger.debug("Log: %s", self.parameters)
-        message = self.parameters[0]["value"]
-        message = self.storage_handler.replace_variables(message)
+        raw = self.parameters[0].get("value", "") if self.parameters else ""
+        message = self.storage_handler.replace_variables(raw)
         self.logger.debug("Log: %s", message)
         # Get current time in literal format
         timestamp = time.strftime("%H:%M:%S", time.localtime())

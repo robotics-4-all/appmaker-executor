@@ -1,10 +1,45 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: appexecutor-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - appexecutor-redis-data:/data
+    networks:
+      - appexecutor-net
+
   appexecutor:
     build: .
     image: appexecutor
     container_name: appexecutor
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    network_mode: host
+    # Bridge networking (not host mode): `redis` resolves to the redis
+    # service below. Host mode broke service DNS and loopback on
+    # Docker Desktop/rootless, which surfaced as
+    # "Connection refused to localhost:6379" inside the container.
+    networks:
+      - appexecutor-net
+    depends_on:
+      - redis
     env_file:
       - ./.env
+    environment:
+      # Hardcoded to the service name: interpolation (${REDIS_HOST:-...})
+      # would let a stray REDIS_HOST=localhost exported in the shell
+      # silently repoint the container at its own loopback.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: ${REDIS_USERNAME:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
     restart: unless-stopped
+
+volumes:
+  appexecutor-redis-data:
+
+networks:
+  appexecutor-net:
+    driver: bridge
