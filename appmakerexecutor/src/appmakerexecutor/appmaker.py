@@ -17,6 +17,9 @@ from commlib.transports.redis import ConnectionParameters as RedisConnectionPara
 
 from appmaker_executor import AppMakerExecutor  # type: ignore # pylint: disable=import-error
 import config as CONFIG  # type: ignore # pylint: disable=import-error
+import mqtt_guard  # type: ignore # pylint: disable=import-error
+
+mqtt_guard.install()
 
 logging.basicConfig(format="%(asctime)s - %(message)s")
 if CONFIG.ZERO_LOGS:

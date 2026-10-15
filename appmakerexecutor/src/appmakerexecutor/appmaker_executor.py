@@ -24,6 +24,9 @@ from appmaker_node import AppMakerNode # type: ignore # pylint: disable=import-e
 from appmaker_node_executor import NodeExecutor # type: ignore # pylint: disable=import-error
 from appmaker_storage import StorageHandler # type: ignore # pylint: disable=import-error
 import config as CONFIG # type: ignore # pylint: disable=import-error
+import mqtt_guard # type: ignore # pylint: disable=import-error
+
+mqtt_guard.install()
 
 
 class AppMakerExecutor(CommlibNode):
